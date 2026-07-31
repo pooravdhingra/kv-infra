@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.local
+*.log
+.DS_Store
+coverage/
+.vite/
+.baileys-auth/
+apps/api/.baileys-auth/
+google-token.json
+*.pem
+*.key
+

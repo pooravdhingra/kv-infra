@@ -1,0 +1,238 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Manrope:wght@600;700&display=swap");
+
+:root {
+  font-family: "DM Sans", sans-serif;
+  color: #23251f;
+  background: #f4f1e9;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+a {
+  color: inherit;
+}
+.app-shell {
+  max-width: 1320px;
+  margin: 0 auto;
+  min-height: 100vh;
+  padding: 0 38px 64px;
+}
+.topbar {
+  height: 86px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #cbc8bd;
+}
+.topbar > div {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+.topbar strong,
+h1,
+h2,
+h3 {
+  font-family: "Manrope", sans-serif;
+}
+.eyebrow {
+  color: #767a69;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+.connection {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  color: #4d5949;
+}
+.connection i {
+  width: 8px;
+  height: 8px;
+  background: #63945a;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px #dbe6d7;
+}
+.nav {
+  display: flex;
+  gap: 30px;
+  padding: 18px 0;
+  border-bottom: 1px solid #dedbd1;
+}
+.nav a {
+  text-decoration: none;
+  color: #6d7064;
+  font-size: 14px;
+}
+.nav a.active {
+  color: #23251f;
+  font-weight: 600;
+}
+main {
+  padding-top: 54px;
+}
+.hero {
+  max-width: 760px;
+}
+.hero h1,
+.placeholder h1 {
+  margin: 10px 0 10px;
+  font-size: clamp(40px, 6vw, 72px);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+.hero p,
+.placeholder p {
+  color: #686b60;
+  font-size: 17px;
+  line-height: 1.6;
+}
+.section {
+  margin-top: 54px;
+}
+.section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.section-heading h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.section-heading span {
+  color: #898b80;
+  font-size: 12px;
+}
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.action-card {
+  min-height: 218px;
+  padding: 22px;
+  position: relative;
+  background: #faf9f5;
+  border: 1px solid #d9d6cc;
+  border-radius: 5px;
+  text-decoration: none;
+  transition:
+    transform 0.2s,
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+.action-card:hover {
+  transform: translateY(-3px);
+  border-color: #7c8773;
+  box-shadow: 0 12px 26px #2a2d2512;
+}
+.action-number {
+  color: #9a9b92;
+  font-size: 12px;
+}
+.action-card h3 {
+  margin: 42px 0 8px;
+  font-size: 19px;
+}
+.action-card p {
+  color: #77796f;
+  line-height: 1.45;
+  font-size: 14px;
+}
+.arrow {
+  position: absolute;
+  bottom: 18px;
+  right: 22px;
+  font-size: 22px;
+}
+.two-column {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 12px;
+}
+.queue-card,
+.principle-card {
+  min-height: 230px;
+  padding: 25px;
+  border: 1px solid #d9d6cc;
+  border-radius: 5px;
+}
+.queue-card {
+  background: #faf9f5;
+}
+.principle-card {
+  background: #26362f;
+  color: #f3f0e6;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.principle-card .eyebrow {
+  color: #aebdaf;
+}
+blockquote {
+  margin: 28px 0 0;
+  font-family: "Manrope", sans-serif;
+  font-size: 23px;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+}
+.empty-state {
+  padding: 38px 0;
+  border-top: 1px solid #e3e0d8;
+}
+.empty-state p {
+  color: #797b72;
+  margin-bottom: 0;
+}
+.placeholder {
+  max-width: 760px;
+  padding: 60px 0;
+}
+.placeholder a {
+  display: inline-block;
+  margin-top: 18px;
+  color: #435c4c;
+  font-weight: 600;
+}
+@media (max-width: 900px) {
+  .action-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .two-column {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 580px) {
+  .app-shell {
+    padding: 0 18px 40px;
+  }
+  .topbar {
+    height: 72px;
+  }
+  .nav {
+    gap: 18px;
+    overflow-x: auto;
+  }
+  main {
+    padding-top: 38px;
+  }
+  .action-grid {
+    grid-template-columns: 1fr;
+  }
+  .hero h1 {
+    font-size: 44px;
+  }
+}
