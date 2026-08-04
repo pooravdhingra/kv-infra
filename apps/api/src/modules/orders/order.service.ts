@@ -188,6 +188,13 @@ export class OrderService {
           `SKU ${requested.sku} is not active`,
         );
       }
+      if (sku.quantityPerCarton <= 0) {
+        throw new AppError(
+          409,
+          "SKU_PACKING_DETAILS_REQUIRED",
+          `Add quantity per carton for ${sku.sku} in SKU Master before creating an order`,
+        );
+      }
       const totals = calculateOrderLineTotals({
         ...sku,
         cartons: requested.cartons,

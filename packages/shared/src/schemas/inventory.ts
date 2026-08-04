@@ -7,7 +7,7 @@ const optionalSheetText = z.string().nullable();
 export const inventoryItemSchema = z.object({
   sku: skuCodeSchema,
   itemDescription: z.string(),
-  quantityPerCarton: z.number().positive(),
+  quantityPerCarton: z.number().nonnegative(),
   unit: z.enum(skuUnits),
   unpackedQuantity: z.number().nonnegative(),
   inPackingQuantity: z.number().nonnegative(),

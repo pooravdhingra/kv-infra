@@ -40,4 +40,37 @@ describe("SupplierService", () => {
     await service.forSku("KV-000002");
     expect(reads).toBe(1);
   });
+
+  it("returns a deduplicated supplier master for provisional SKUs", async () => {
+    const service = new SupplierService({
+      list: async () => [
+        {
+          sku: "KV-B000001",
+          itemDescription: "Item one",
+          name: "Supplier A",
+          number: "9111111111",
+          priority: 2,
+        },
+        {
+          sku: "KV-T000001",
+          itemDescription: "Item two",
+          name: "Supplier A",
+          number: "9111111111",
+          priority: 1,
+        },
+        {
+          sku: "KV-P000001",
+          itemDescription: "Item three",
+          name: "Supplier B",
+          number: "9222222222",
+          priority: 2,
+        },
+      ],
+    });
+
+    expect((await service.all()).map((item) => item.name)).toEqual([
+      "Supplier A",
+      "Supplier B",
+    ]);
+  });
 });

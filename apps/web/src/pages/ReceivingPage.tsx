@@ -5,10 +5,19 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import type { OpenOrderOption, Receipt, Sku, Supplier } from "@kv-infra/shared";
+import {
+  skuOems,
+  type OpenOrderOption,
+  type Receipt,
+  type Sku,
+  type SkuOem,
+  type Supplier,
+} from "@kv-infra/shared";
 
 import {
   apiErrorMessage,
+  createSku,
+  listAllSuppliers,
   listOpenOrderOptions,
   listRecentReceipts,
   listSkus,
@@ -56,6 +65,7 @@ export const ReceivingPage = () => {
   const [skuQuery, setSkuQuery] = useState(requestedSku);
   const [skuSearchOpen, setSkuSearchOpen] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [usingSupplierMaster, setUsingSupplierMaster] = useState(false);
   const [supplierNumber, setSupplierNumber] = useState("");
   const [options, setOptions] = useState<OpenOrderOption[]>([]);
   const [orderLineId, setOrderLineId] = useState(requestedOrderLine);
@@ -71,6 +81,10 @@ export const ReceivingPage = () => {
   const [formCollapsed, setFormCollapsed] = useState(false);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showNewSku, setShowNewSku] = useState(false);
+  const [newSkuOem, setNewSkuOem] = useState<SkuOem>("Bajaj");
+  const [newSkuDescription, setNewSkuDescription] = useState("");
+  const [creatingSku, setCreatingSku] = useState(false);
 
   useEffect(() => {
     void listSkus()
@@ -99,6 +113,7 @@ export const ReceivingPage = () => {
       if (skus.length > 0) {
         setOptions([]);
         setSuppliers([]);
+        setUsingSupplierMaster(false);
         setSupplierNumber("");
         setOrderLineId("");
       }
@@ -107,12 +122,18 @@ export const ReceivingPage = () => {
     let cancelled = false;
     void Promise.all([
       listOpenOrderOptions(selectedSku.sku),
-      listSuppliers(selectedSku.sku),
+      listSuppliers(selectedSku.sku).then(async (configured) => ({
+        suppliers:
+          configured.length > 0 ? configured : await listAllSuppliers(),
+        usingMaster: configured.length === 0,
+      })),
     ])
-      .then(([orderOptions, supplierOptions]) => {
+      .then(([orderOptions, supplierResult]) => {
         if (cancelled) return;
+        const supplierOptions = supplierResult.suppliers;
         setOptions(orderOptions);
         setSuppliers(supplierOptions);
+        setUsingSupplierMaster(supplierResult.usingMaster);
         setOrderLineId((current) =>
           orderOptions.some((item) => item.orderLineId === current)
             ? current
@@ -141,6 +162,34 @@ export const ReceivingPage = () => {
     setSkuQuery(skuLabel(item));
     setSkuSearchOpen(false);
     setMessage("");
+  };
+
+  const addNewSku = async () => {
+    const description = newSkuDescription.trim();
+    if (!description) {
+      setMessage("Enter the new item description.");
+      return;
+    }
+    setCreatingSku(true);
+    setMessage("");
+    try {
+      const created = await createSku({
+        oem: newSkuOem,
+        itemDescription: description,
+      });
+      setSkus((items) => [...items, created]);
+      chooseSku(created);
+      setShowNewSku(false);
+      setNewSkuOem("Bajaj");
+      setNewSkuDescription("");
+      setMessage(
+        `${created.sku} created with packing details set to zero. Complete the receipt below.`,
+      );
+    } catch (error) {
+      setMessage(apiErrorMessage(error));
+    } finally {
+      setCreatingSku(false);
+    }
   };
 
   const selectedOrder = options.find(
@@ -284,6 +333,60 @@ export const ReceivingPage = () => {
                 )}
               </div>
             </label>
+            <button
+              type="button"
+              className="text-button receiving-add-sku-button"
+              onClick={() => {
+                setShowNewSku((visible) => !visible);
+                if (!showNewSku && skuQuery.trim())
+                  setNewSkuDescription(skuQuery.trim());
+              }}
+            >
+              {showNewSku ? "Cancel new SKU" : "+ Add a new SKU"}
+            </button>
+            {showNewSku && (
+              <div className="receiving-new-sku">
+                <div className="section-heading">
+                  <h3>Create new SKU</h3>
+                </div>
+                <label>
+                  OEM
+                  <select
+                    value={newSkuOem}
+                    onChange={(event) =>
+                      setNewSkuOem(event.target.value as SkuOem)
+                    }
+                  >
+                    {skuOems.map((option) => (
+                      <option key={option}>{option}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Item description
+                  <input
+                    value={newSkuDescription}
+                    maxLength={200}
+                    placeholder="Item description"
+                    onChange={(event) =>
+                      setNewSkuDescription(event.target.value)
+                    }
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={creatingSku || !newSkuDescription.trim()}
+                  onClick={() => void addNewSku()}
+                >
+                  {creatingSku ? "Creating…" : "Create and select SKU"}
+                </button>
+                <small>
+                  Packing quantity, weight, and dimensions will start at zero
+                  and can be added later in SKU master.
+                </small>
+              </div>
+            )}
             <div className="selected-item-line">
               {selectedSku ? (
                 <>
@@ -337,6 +440,12 @@ export const ReceivingPage = () => {
                     </option>
                   ))}
                 </select>
+                {usingSupplierMaster && suppliers.length > 0 && (
+                  <small>
+                    No suppliers are configured for this SKU yet. Showing the
+                    supplier master list.
+                  </small>
+                )}
               </label>
               <label>
                 Warehouse location
@@ -412,7 +521,11 @@ export const ReceivingPage = () => {
             <button
               className="primary-button"
               disabled={
-                saving || !selectedSku || !selectedSupplier || quantity <= 0
+                saving ||
+                creatingSku ||
+                !selectedSku ||
+                !selectedSupplier ||
+                quantity <= 0
               }
             >
               {saving ? "Receiving…" : "Mark as received"}

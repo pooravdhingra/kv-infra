@@ -9,15 +9,21 @@ import {
   updateSku,
 } from "../api/client";
 
-const emptySku: Sku = {
+type NumericSkuField =
+  "quantityPerCarton" | "weightPerCarton" | "length" | "breadth" | "height";
+
+type SkuForm = Omit<Sku, NumericSkuField> &
+  Record<NumericSkuField, number | "">;
+
+const emptySku: SkuForm = {
   sku: "",
   itemDescription: "",
-  quantityPerCarton: 1,
+  quantityPerCarton: "",
   unit: "pcs",
-  weightPerCarton: 0,
-  length: 0,
-  breadth: 0,
-  height: 0,
+  weightPerCarton: "",
+  length: "",
+  breadth: "",
+  height: "",
 };
 
 const numberFields = [
@@ -30,7 +36,7 @@ const numberFields = [
 
 export const SkuMasterPage = () => {
   const [skus, setSkus] = useState<Sku[]>([]);
-  const [form, setForm] = useState<Sku>(emptySku);
+  const [form, setForm] = useState<SkuForm>(emptySku);
   const [oem, setOem] = useState<SkuOem>("Bajaj");
   const [editing, setEditing] = useState(false);
   const [search, setSearch] = useState("");
@@ -57,12 +63,20 @@ export const SkuMasterPage = () => {
     setSaving(true);
     setMessage("");
     try {
+      const details = {
+        itemDescription: form.itemDescription,
+        unit: form.unit,
+        quantityPerCarton:
+          form.quantityPerCarton === "" ? 0 : form.quantityPerCarton,
+        weightPerCarton: form.weightPerCarton === "" ? 0 : form.weightPerCarton,
+        length: form.length === "" ? 0 : form.length,
+        breadth: form.breadth === "" ? 0 : form.breadth,
+        height: form.height === "" ? 0 : form.height,
+      };
       if (editing) {
-        const { sku, ...updates } = form;
-        await updateSku(sku, updates);
-        setMessage(`${sku} updated.`);
+        await updateSku(form.sku, details);
+        setMessage(`${form.sku} updated.`);
       } else {
-        const { sku: _sku, ...details } = form;
         const created = await createSku({ ...details, oem });
         setMessage(`${created.sku} created with its inventory row.`);
       }
@@ -245,13 +259,18 @@ export const SkuMasterPage = () => {
                   {label}
                   <input
                     type="number"
-                    min={name === "quantityPerCarton" ? "0.000001" : "0"}
+                    min="0"
                     step="any"
-                    required
+                    required={editing}
+                    placeholder="0"
                     value={form[name]}
-                    onChange={(event) =>
-                      setForm({ ...form, [name]: event.target.valueAsNumber })
-                    }
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setForm({
+                        ...form,
+                        [name]: value === "" ? "" : event.target.valueAsNumber,
+                      });
+                    }}
                   />
                 </label>
               ))}

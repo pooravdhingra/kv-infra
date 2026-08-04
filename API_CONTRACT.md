@@ -32,6 +32,7 @@ All endpoints use JSON under `/api`. Successful responses use `{ "data": ... }`;
 | POST   | `/api/packing/start`                           | Move unpacked stock into an append-logged session    |
 | POST   | `/api/packing/:packingId/finish`               | Reconcile QA and move complete cartons to packed     |
 | GET    | `/api/receiving?limit=20`                      | List recent receipt events                           |
+| GET    | `/api/suppliers`                               | List unique known suppliers from Supplier Master     |
 | GET    | `/api/suppliers/:sku`                          | List prioritized suppliers configured for an SKU     |
 | POST   | `/api/orders/:orderId/allocate`                | Reserve packed stock for an exact order line         |
 | GET    | `/api/allocations?orderId=...`                 | List allocation history                              |
@@ -66,7 +67,7 @@ All endpoints use JSON under `/api`. Successful responses use `{ "data": ... }`;
 }
 ```
 
-`POST /api/skus` requires `oem` as `Bajaj`, `TVS`, `Piaggio`, or `Other`. It generates an independent OEM sequence using `KV-B000001`, `KV-T000001`, `KV-P000001`, or `KV-X000001` respectively and returns the identifier in the response. Existing `KV-000001`-style identifiers remain unchanged and do not affect OEM sequences. Valid units are `pcs`, `kg`, `roll`, `meter`, and `set`. `weightPerCarton` is measured in kilograms. Update requests use the SKU path parameter; SKU identity and OEM prefix are immutable.
+`POST /api/skus` requires only `oem` (`Bajaj`, `TVS`, `Piaggio`, or `Other`) and `itemDescription`. It generates an independent OEM sequence using `KV-B000001`, `KV-T000001`, `KV-P000001`, or `KV-X000001` respectively and returns the identifier in the response. Existing `KV-000001`-style identifiers remain unchanged and do not affect OEM sequences. `quantityPerCarton`, `weightPerCarton`, `length`, `breadth`, and `height` are optional and default to `0`; `unit` defaults to `pcs`. Valid units are `pcs`, `kg`, `roll`, `meter`, and `set`, and `weightPerCarton` is measured in kilograms. Update requests use the SKU path parameter; SKU identity and OEM prefix are immutable.
 
 Delete is an audit-preserving archive operation. It prefixes the Packing Master and Inventory identities with `DELETED-` in one Sheets values batch update; logs are never deleted and archived identifiers are never reused.
 

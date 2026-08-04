@@ -1036,6 +1036,35 @@ main {
 .receiving-sku-combobox .sku-matches button {
   background: #fffdf8;
 }
+.receiving-add-sku-button {
+  width: fit-content;
+  margin: -5px 0 14px;
+}
+.receiving-new-sku {
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid #d9d6cc;
+  border-radius: 5px;
+  background: #f2efe7;
+}
+.receiving-new-sku .section-heading {
+  margin-bottom: 12px;
+}
+.receiving-new-sku h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.receiving-new-sku > small,
+.receiving-form-panel label > small {
+  display: block;
+  margin-top: 7px;
+  color: #77796f;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.receiving-new-sku .secondary-button {
+  margin-right: 10px;
+}
 .recent-receipts-panel {
   min-width: 0;
 }

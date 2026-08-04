@@ -82,6 +82,25 @@ describe("SkuService", () => {
     expect(repository.inventory).toEqual([{ sku: "KV-B000001", rowNumber: 2 }]);
   });
 
+  it("creates a provisional SKU with zero packing details", async () => {
+    const repository = new FakeSkuRepository();
+    const result = await new SkuService(repository).create({
+      oem: "TVS",
+      itemDescription: "New sample item",
+    });
+
+    expect(result).toEqual({
+      sku: "KV-T000001",
+      itemDescription: "New sample item",
+      quantityPerCarton: 0,
+      unit: "pcs",
+      weightPerCarton: 0,
+      length: 0,
+      breadth: 0,
+      height: 0,
+    });
+  });
+
   it("increments within an OEM while ignoring legacy and other OEM IDs", async () => {
     const repository = new FakeSkuRepository();
     repository.skus.push(

@@ -8,7 +8,7 @@ Column names and order below are exact. Integration code must fail visibly when 
 
 One row per SKU. Creating a SKU also creates its zero-valued inventory row if absent.
 
-New SKU identifiers encode the OEM and maintain independent sequences: `KV-B000001` for Bajaj, `KV-T000001` for TVS, `KV-P000001` for Piaggio, and `KV-X000001` for Other. Existing `KV-000001`-style and other legacy identifiers remain valid and unchanged. OEM is encoded in the immutable SKU rather than adding a sheet column. `WEIGHT/CTN` is stored in kilograms.
+New SKU identifiers encode the OEM and maintain independent sequences: `KV-B000001` for Bajaj, `KV-T000001` for TVS, `KV-P000001` for Piaggio, and `KV-X000001` for Other. Existing `KV-000001`-style and other legacy identifiers remain valid and unchanged. OEM is encoded in the immutable SKU rather than adding a sheet column. `WEIGHT/CTN` is stored in kilograms. A provisional SKU may be created with only OEM and item description; `QUANTITY/CTN`, `WEIGHT/CTN`, `LENGTH`, `BREADTH`, and `HEIGHT` are stored as `0` until measured and edited, and `UNIT` defaults to `pcs`.
 
 ## SUPPLIER MASTER LIST
 
@@ -32,7 +32,7 @@ The first row is frozen and all system columns are hidden. `T-QTY`, `GROSS WT`, 
 
 Exactly one row per SKU. Unpacked stock never contributes to available quantity.
 
-`PACKED TOTAL QTY = PACKED CTNS × QTY / CARTON`. `AVAILABLE QTY = PACKED TOTAL QTY − TOTAL ASSIGNED`. Both are written as visible formulas, while the API independently recalculates and validates them before returning data. Manual corrections use deltas, cannot make any stock bucket negative, and append the operator-entered reason to `NOTES` rather than deleting history.
+`PACKED TOTAL QTY = PACKED CTNS × QTY / CARTON`. `AVAILABLE QTY = PACKED TOTAL QTY − TOTAL ASSIGNED`. Both are written as visible formulas, while the API independently recalculates and validates them before returning data. A provisional SKU may have `QTY / CARTON = 0` until its first packing measurements are entered; it cannot be added to an order until carton quantity is positive. Manual corrections use deltas, cannot make any stock bucket negative, and append the operator-entered reason to `NOTES` rather than deleting history.
 
 ## RECEIVING LOG
 

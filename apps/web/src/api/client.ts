@@ -213,6 +213,9 @@ export const listSuppliers = (sku: string) => {
   return request;
 };
 
+export const listAllSuppliers = async () =>
+  supplierListResponseSchema.parse((await api.get("/suppliers")).data).data;
+
 export const listSupplierRequests = async (pending = false) =>
   supplierRequestListResponseSchema.parse(
     (await api.get(`/supplier-requests${pending ? "/pending" : ""}`)).data,

@@ -35,7 +35,7 @@ export const packingSessionSchema = z.object({
   sku: skuCodeSchema,
   itemDescription: z.string(),
   unit: z.enum(skuUnits),
-  quantityPerCarton: z.number().positive(),
+  quantityPerCarton: z.number().nonnegative(),
   quantityTaken: z.number().positive(),
   goodQuantity: z.number().nonnegative(),
   packedCartons: z.number().nonnegative(),

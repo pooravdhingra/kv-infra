@@ -9,6 +9,7 @@
 - Dashboard recommendations prioritize failed sends, due follow-ups, active packing, and actionable order states from live workflow data.
 - Exact Sheets headers pass and mismatched headers fail before writes.
 - SKU creation requires an OEM, assigns the next independent `KV-BNNNNNN`, `KV-TNNNNNN`, `KV-PNNNNNN`, or `KV-XNNNNNN` identifier, and adds both master and inventory records.
+- SKU creation accepts OEM and item description alone, defaulting packing quantity, weight, and dimensions to zero and unit to `pcs`.
 - Legacy and other-OEM SKU names do not affect the selected OEM sequence.
 - Generated identifiers continue safely beyond six digits.
 - SKU deletion archives matching master/inventory identities, hides the SKU from active results, and does not allow its generated identifier to be reused.
@@ -24,6 +25,7 @@
 - Receiving order lookup batch-reads order tabs and fires only after a complete SKU selection.
 - Multi-tab reads associate returned values by sheet name, including when an earlier tab is empty and omitted from Google's response.
 - Supplier Master is read through a one-minute cache and suppliers are priority sorted.
+- The all-suppliers fallback deduplicates supplier identities for receiving a newly created SKU without a configured supplier row.
 - A receipt write reuses one Receiving Log snapshot and commits Inventory plus log row in one values batch update.
 - Direct allocations enforce available packed stock and exact remaining demand.
 - Fully reserved order lines derive reserved quantity from the allocation ledger, show zero shortfall, and do not request supplier action even if the order tab cell is stale.

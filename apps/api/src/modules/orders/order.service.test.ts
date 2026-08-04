@@ -149,6 +149,29 @@ describe("OrderService", () => {
     ).rejects.toMatchObject({ code: "UNKNOWN_SKU", status: 400 });
   });
 
+  it("rejects an order for a provisional SKU without carton quantity", async () => {
+    const repository = new FakeOrderRepository();
+    const provisionalSku = { ...sku, quantityPerCarton: 0 };
+    await expect(
+      new OrderService(
+        repository,
+        {
+          ...skuRepository,
+          listSkus: async () => [{ ...provisionalSku, rowNumber: 2 }],
+        },
+        { list: async () => [{ ...inventory, quantityPerCarton: 0 }] },
+      ).create({
+        customerName: "ABC Traders",
+        dateReceived: "2026-08-04",
+        items: [{ sku: provisionalSku.sku, cartons: 1 }],
+      }),
+    ).rejects.toMatchObject({
+      code: "SKU_PACKING_DETAILS_REQUIRED",
+      status: 409,
+    });
+    expect(repository.written).toEqual([]);
+  });
+
   it("persists a refreshed stock check to its order tab", async () => {
     const repository = new FakeOrderRepository();
     const service = new OrderService(

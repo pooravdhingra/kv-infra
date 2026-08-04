@@ -6,7 +6,7 @@ Load one prioritized queue from current orders, supplier requests, packing sessi
 
 ## Create SKU
 
-Require the operator to choose Bajaj, TVS, Piaggio, or Other when creating a SKU. Generate the next identifier in that OEM's independent `KV-BNNNNNN`, `KV-TNNNNNN`, `KV-PNNNNNN`, or `KV-XNNNNNN` sequence, append to `PACKING MASTER LIST`, then create a zero-valued `INVENTORY` row with the same identifier. Legacy SKU formats remain readable and unchanged but do not affect OEM sequences.
+Require the operator to choose Bajaj, TVS, Piaggio, or Other and enter an item description when creating a SKU. Packing quantity, weight, and dimensions are optional at creation and default to zero, while unit defaults to `pcs`; the operator can complete those details in SKU Master after measurement. Generate the next identifier in that OEM's independent `KV-BNNNNNN`, `KV-TNNNNNN`, `KV-PNNNNNN`, or `KV-XNNNNNN` sequence, append to `PACKING MASTER LIST`, then create a zero-valued `INVENTORY` row with the same identifier. Legacy SKU formats remain readable and unchanged but do not affect OEM sequences.
 
 ## Delete SKU
 
@@ -24,7 +24,7 @@ Read one active Inventory row per SKU and calculate packed total and available q
 
 ## Receive material
 
-Validate an active SKU, append `RECEIVING LOG`, and increase only `UNPACKED QTY`. General stock remains unrelated to an order. When the operator explicitly selects an exact open order line, update that order row to received; mark supplier state received only when separately selected.
+Validate an active SKU, append `RECEIVING LOG`, and increase only `UNPACKED QTY`. If the item is new, allow the operator to create and immediately select a provisional SKU using only OEM and item description. Existing SKU-specific suppliers remain preferred; when a provisional SKU has no supplier mapping yet, offer the deduplicated Supplier Master list so the receipt still uses a known supplier. General stock remains unrelated to an order. When the operator explicitly selects an exact open order line, update that order row to received; mark supplier state received only when separately selected.
 
 ## Start packing
 
