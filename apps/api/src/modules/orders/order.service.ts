@@ -5,6 +5,7 @@ import {
   createOrderRequestSchema,
   getSuggestedAction,
   orderSchema,
+  shipInventoryTransition,
   type InventoryItem,
   type Order,
   type OrderLine,
@@ -13,7 +14,12 @@ import {
 
 import { env } from "../../config/env.js";
 import { AppError } from "../../lib/app-error.js";
+import type { AllocationRepository } from "../allocations/allocation.repository.js";
 import type { InventoryService } from "../inventory/inventory.service.js";
+import type {
+  InventoryShipmentRepository,
+  InventorySourceRecord,
+} from "../inventory/inventory.repository.js";
 import type { SkuRepository } from "../sku/sku.repository.js";
 import {
   isOrderHeader,
@@ -26,6 +32,7 @@ const displayStatuses = {
   READY_TO_RESERVE: "READY TO RESERVE",
   NEEDS_PACKING: "NEEDS PACKING",
   NEEDS_SUPPLIER: "NEEDS SUPPLIER",
+  FULLY_RESERVED: "FULLY RESERVED",
 } as const;
 
 const numeric = (value: unknown, label: string) => {
@@ -41,6 +48,9 @@ const numeric = (value: unknown, label: string) => {
 };
 
 const text = (value: unknown) => String(value ?? "").trim();
+
+const allocationKey = (orderId: string, orderLineId: string) =>
+  `${orderId}\u0000${orderLineId}`;
 
 export const generateNextOrderId = (year: number, orderIds: string[]) => {
   const highest = orderIds.reduce((max, orderId) => {
@@ -110,16 +120,23 @@ const stockLine = (
     unpackedQuantity,
     supplierRequestStatus: base.supplierRequestStatus,
   });
+  const stockPosition =
+    actions.remainingQuantity === 0
+      ? {
+          shortfallQuantity: 0,
+          stockStatus: "FULLY_RESERVED" as const,
+        }
+      : calculateStockCheck({
+          requiredQuantity: actions.remainingQuantity,
+          availableQuantity,
+          unpackedQuantity,
+        });
   return {
     ...base,
     availableQuantity,
     unpackedQuantity,
     assignedQuantity,
-    ...calculateStockCheck({
-      requiredQuantity: actions.remainingQuantity,
-      availableQuantity,
-      unpackedQuantity,
-    }),
+    ...stockPosition,
     ...actions,
   };
 };
@@ -131,6 +148,11 @@ export class OrderService {
     private readonly repository: OrderRepository,
     private readonly skuRepository: SkuRepository,
     private readonly inventoryService: Pick<InventoryService, "list">,
+    private readonly allocationRepository?: Pick<
+      AllocationRepository,
+      "snapshot"
+    >,
+    private readonly inventoryRepository?: InventoryShipmentRepository,
   ) {}
 
   async create(input: unknown, idempotencyKey?: string) {
@@ -228,6 +250,8 @@ export class OrderService {
     const created = await this.repository.create(tabTitle, values);
     const order = orderSchema.parse({
       orderId,
+      status: "PENDING",
+      completedAt: null,
       customerName: request.customerName,
       dateReceived: request.dateReceived,
       orderNotes: request.orderNotes,
@@ -241,16 +265,28 @@ export class OrderService {
   }
 
   async list() {
-    const [snapshot, inventory] = await Promise.all([
+    const [snapshot, inventory, allocationSnapshot] = await Promise.all([
       this.repository.snapshot(),
       this.inventoryService.list(),
+      this.allocationRepository?.snapshot(),
     ]);
     const inventoryMap = new Map(inventory.map((item) => [item.sku, item]));
+    const reservedByLine = new Map<string, number>();
+    allocationSnapshot?.events.forEach((event) => {
+      const key = allocationKey(event.orderId, event.orderLineId);
+      reservedByLine.set(key, (reservedByLine.get(key) ?? 0) + event.quantity);
+    });
     return snapshot
       .filter(
         (sheet) => isOrderHeader(sheet.rows[0] ?? []) && sheet.rows.length > 1,
       )
-      .map((sheet) => this.fromSheet(sheet, inventoryMap))
+      .map((sheet) =>
+        this.fromSheet(
+          sheet,
+          inventoryMap,
+          allocationSnapshot ? reservedByLine : undefined,
+        ),
+      )
       .sort((left, right) => right.orderId.localeCompare(left.orderId));
   }
 
@@ -267,8 +303,101 @@ export class OrderService {
 
   async stockCheck(orderId: string) {
     const order = await this.get(orderId);
+    if (order.status === "COMPLETED")
+      throw new AppError(
+        409,
+        "ORDER_COMPLETED",
+        `${orderId} has already been shipped`,
+      );
     await this.repository.updateStockCheck(order.sheetTitle, order.items);
     return order;
+  }
+
+  async ship(orderId: string) {
+    const order = await this.get(orderId);
+    if (order.status === "COMPLETED") return order;
+    if (
+      order.items.length === 0 ||
+      order.items.some(
+        (item) =>
+          item.stockStatus !== "FULLY_RESERVED" || item.remainingQuantity > 0,
+      )
+    )
+      throw new AppError(
+        409,
+        "ORDER_NOT_READY_TO_SHIP",
+        "Every order line must be fully packed and reserved before shipping",
+      );
+    if (!this.inventoryRepository)
+      throw new AppError(
+        503,
+        "INVENTORY_NOT_CONFIGURED",
+        "Inventory shipment storage is not configured",
+      );
+    const completedAt = new Date().toISOString();
+    const inventory = await this.inventoryRepository.list();
+    const shippedBySku = new Map<string, number>();
+    order.items.forEach((item) =>
+      shippedBySku.set(
+        item.sku,
+        (shippedBySku.get(item.sku) ?? 0) + item.reservedQuantity,
+      ),
+    );
+    const originals: InventorySourceRecord[] = [];
+    const updated = [...shippedBySku].map(([sku, shippedQuantity]) => {
+      const current = inventory.find(
+        (item) => item.sku === sku && !item.sku.startsWith("DELETED-"),
+      );
+      if (!current)
+        throw new AppError(
+          404,
+          "INVENTORY_NOT_FOUND",
+          `Inventory for ${sku} was not found`,
+        );
+      originals.push(current);
+      let movement;
+      try {
+        movement = shipInventoryTransition({
+          quantityPerCarton: current.quantityPerCarton,
+          packedCartons: current.packedCartons,
+          totalAssigned: current.totalAssigned,
+          shippedQuantity,
+        });
+      } catch (error) {
+        throw new AppError(
+          409,
+          "INVALID_SHIPMENT",
+          error instanceof Error ? error.message : "Order cannot be shipped",
+        );
+      }
+      return {
+        ...current,
+        ...movement,
+        notes: [
+          current.notes,
+          `[${completedAt}] SHIPPED ${orderId}: ${shippedQuantity} ${current.unit}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        lastUpdated: completedAt,
+      };
+    });
+    await this.inventoryRepository.updateMany(updated);
+    try {
+      await this.repository.completeOrder(
+        order.sheetTitle,
+        order.items.length,
+        completedAt,
+      );
+    } catch (error) {
+      await this.inventoryRepository.updateMany(originals);
+      throw error;
+    }
+    return orderSchema.parse({
+      ...order,
+      status: "COMPLETED",
+      completedAt,
+    });
   }
 
   async markLineReceived(
@@ -277,6 +406,12 @@ export class OrderService {
     markSupplierRequestReceived: boolean,
   ) {
     const located = await this.locateLine(orderId, orderLineId);
+    if (text(located.row[9]).toUpperCase() === "SHIPPED")
+      throw new AppError(
+        409,
+        "ORDER_COMPLETED",
+        `${orderId} has already been shipped`,
+      );
     await this.repository.updateLineState(
       located.sheet.title,
       located.rowNumber,
@@ -294,26 +429,59 @@ export class OrderService {
     orderLineId: string,
     quantity: number,
   ) {
+    return this.adjustAllocation(orderId, orderLineId, quantity);
+  }
+
+  async adjustAllocation(
+    orderId: string,
+    orderLineId: string,
+    quantityDelta: number,
+  ) {
     const located = await this.locateLine(orderId, orderLineId);
     const required = numeric(located.row[16], "REQUIRED QTY");
-    const reserved = numeric(located.row[17], "RESERVED QTY");
-    const nextReserved = reserved + quantity;
-    if (quantity <= 0 || nextReserved > required) {
+    const allocationSnapshot = await this.allocationRepository?.snapshot();
+    const reserved = allocationSnapshot
+      ? allocationSnapshot.events
+          .filter(
+            (event) =>
+              event.orderId === orderId && event.orderLineId === orderLineId,
+          )
+          .reduce((total, event) => total + event.quantity, 0)
+      : numeric(located.row[17], "RESERVED QTY");
+    const nextReserved = reserved + quantityDelta;
+    if (quantityDelta === 0 || nextReserved < 0 || nextReserved > required) {
       throw new AppError(
         409,
         "INVALID_ALLOCATION",
-        "Allocation exceeds the remaining order-line quantity",
+        "Allocation change is outside the order-line quantity",
       );
     }
     await this.repository.updateLineState(
       located.sheet.title,
       located.rowNumber,
       {
-        status: nextReserved === required ? "READY" : "PARTIALLY RESERVED",
+        status:
+          nextReserved === required ? "FULLY RESERVED" : "PARTIALLY RESERVED",
         reservedQuantity: nextReserved,
       },
     );
     return { requiredQuantity: required, reservedQuantity: nextReserved };
+  }
+
+  async setSupplierRequestStatus(
+    orderId: string,
+    orderLineId: string,
+    supplierRequestStatus: "SENT" | "CONFIRMED" | "RECEIVED",
+  ) {
+    const located = await this.locateLine(orderId, orderLineId);
+    await this.repository.updateLineState(
+      located.sheet.title,
+      located.rowNumber,
+      {
+        status: text(located.row[9]) || "NEEDS SUPPLIER",
+        supplierRequestStatus,
+      },
+    );
   }
 
   private async locateLine(orderId: string, orderLineId: string) {
@@ -340,6 +508,7 @@ export class OrderService {
   private fromSheet(
     sheet: OrderSheetSnapshot,
     inventory: Map<string, InventoryItem>,
+    reservedByLine?: Map<string, number>,
   ) {
     const dataRows = sheet.rows.slice(1).filter((row) => row[13]);
     const first = dataRows[0];
@@ -349,6 +518,16 @@ export class OrderService {
         "INVALID_ORDER_SHEET",
         `${sheet.title} has no order rows`,
       );
+    const completed = dataRows.every(
+      (row) => text(row[9]).toUpperCase() === "SHIPPED",
+    );
+    const completedAt = completed
+      ? (dataRows
+          .map((row) => text(row[20]))
+          .filter(Boolean)
+          .sort()
+          .at(-1) ?? null)
+      : null;
     const items = dataRows.map((row) => {
       const totals = calculateOrderLineTotals({
         cartons: numeric(row[4], "NO OF CTNS"),
@@ -359,9 +538,11 @@ export class OrderService {
         height: numeric(row[12], "HEIGHT"),
       });
       const sku = text(row[0]).toUpperCase();
+      const orderId = text(row[13]);
+      const orderLineId = text(row[14]);
       return stockLine(
         {
-          orderLineId: text(row[14]),
+          orderLineId,
           sku,
           itemDescription: text(row[1]),
           quantityPerCarton: numeric(row[2], "QUANTITY/CTN"),
@@ -372,7 +553,9 @@ export class OrderService {
           length: numeric(row[10], "LENGTH"),
           breadth: numeric(row[11], "BREADTH"),
           height: numeric(row[12], "HEIGHT"),
-          reservedQuantity: numeric(row[17], "RESERVED QTY"),
+          reservedQuantity:
+            reservedByLine?.get(allocationKey(orderId, orderLineId)) ??
+            numeric(row[17], "RESERVED QTY"),
           supplierRequestStatus: (
             ["SENT", "CONFIRMED", "RECEIVED"] as const
           ).includes(text(row[19]) as "SENT" | "CONFIRMED" | "RECEIVED")
@@ -384,6 +567,8 @@ export class OrderService {
     });
     return orderSchema.parse({
       orderId: text(first[13]),
+      status: completed ? "COMPLETED" : "PENDING",
+      completedAt,
       customerName: text(first[22]),
       dateReceived: text(first[15]),
       orderNotes: text(first[21]),

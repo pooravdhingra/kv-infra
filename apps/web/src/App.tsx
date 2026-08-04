@@ -12,6 +12,9 @@ import { ReceivingPage } from "./pages/ReceivingPage";
 import { StartPackingPage } from "./pages/StartPackingPage";
 import { FinishPackingPage } from "./pages/FinishPackingPage";
 import { SkuMasterPage } from "./pages/SkuMasterPage";
+import { SupplierRequestsPage } from "./pages/SupplierRequestsPage";
+import { NewSupplierRequestPage } from "./pages/NewSupplierRequestPage";
+import { GroupSupplierRequestsPage } from "./pages/GroupSupplierRequestsPage";
 
 export const App = () => {
   const path = window.location.pathname;
@@ -25,6 +28,9 @@ export const App = () => {
     "/packing": <PackingPage />,
     "/packing/start": <StartPackingPage />,
     "/settings": <SettingsPage />,
+    "/supplier-requests": <SupplierRequestsPage />,
+    "/supplier-requests/new": <NewSupplierRequestPage />,
+    "/supplier-requests/group": <GroupSupplierRequestsPage />,
   };
 
   const inventoryMatch = path.match(/^\/inventory\/([^/]+)$/);

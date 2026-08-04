@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const skuUnits = ["pcs", "kg", "roll", "meter", "set"] as const;
+export const skuOems = ["Bajaj", "TVS", "Piaggio", "Other"] as const;
 
 export const skuCodeSchema = z
   .string()
@@ -21,12 +22,15 @@ export const skuSchema = z.object({
   height: z.number().nonnegative(),
 });
 
-export const createSkuRequestSchema = skuSchema.omit({ sku: true });
+export const createSkuRequestSchema = skuSchema
+  .omit({ sku: true })
+  .extend({ oem: z.enum(skuOems) });
 export const updateSkuRequestSchema = skuSchema.omit({ sku: true });
 
 export const skuResponseSchema = z.object({ data: skuSchema });
 export const skuListResponseSchema = z.object({ data: z.array(skuSchema) });
 
 export type Sku = z.infer<typeof skuSchema>;
+export type SkuOem = (typeof skuOems)[number];
 export type CreateSkuRequest = z.input<typeof createSkuRequestSchema>;
 export type UpdateSkuRequest = z.input<typeof updateSkuRequestSchema>;

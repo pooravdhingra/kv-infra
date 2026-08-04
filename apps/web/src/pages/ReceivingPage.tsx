@@ -66,6 +66,8 @@ export const ReceivingPage = () => {
   const [receivedBy, setReceivedBy] = useState("");
   const [notes, setNotes] = useState("");
   const [markRequestReceived, setMarkRequestReceived] = useState(false);
+  const [sendDeliveryConfirmation, setSendDeliveryConfirmation] =
+    useState(false);
   const [formCollapsed, setFormCollapsed] = useState(false);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -173,6 +175,10 @@ export const ReceivingPage = () => {
           : {}),
         markSupplierRequestReceived:
           Boolean(selectedOrder) && markRequestReceived,
+        sendDeliveryConfirmation:
+          Boolean(selectedOrder) &&
+          markRequestReceived &&
+          sendDeliveryConfirmation,
       });
       setRecent((items) => [receipt, ...items].slice(0, 20));
       setQuantity(0);
@@ -189,7 +195,6 @@ export const ReceivingPage = () => {
     <section className="page-panel">
       <div className="page-title-row">
         <div>
-          <span className="eyebrow">Inbound stock</span>
           <h1>Receiving</h1>
         </div>
       </div>
@@ -357,6 +362,7 @@ export const ReceivingPage = () => {
                 onChange={(event) => {
                   setOrderLineId(event.target.value);
                   setMarkRequestReceived(false);
+                  setSendDeliveryConfirmation(false);
                 }}
                 disabled={!selectedSku}
               >
@@ -374,11 +380,25 @@ export const ReceivingPage = () => {
                 <input
                   type="checkbox"
                   checked={markRequestReceived}
-                  onChange={(event) =>
-                    setMarkRequestReceived(event.target.checked)
-                  }
+                  onChange={(event) => {
+                    setMarkRequestReceived(event.target.checked);
+                    if (!event.target.checked)
+                      setSendDeliveryConfirmation(false);
+                  }}
                 />{" "}
                 Mark linked supplier request received
+              </label>
+            )}
+            {selectedOrder && markRequestReceived && (
+              <label className="check-label">
+                <input
+                  type="checkbox"
+                  checked={sendDeliveryConfirmation}
+                  onChange={(event) =>
+                    setSendDeliveryConfirmation(event.target.checked)
+                  }
+                />{" "}
+                Send delivery confirmation on WhatsApp
               </label>
             )}
             <label>

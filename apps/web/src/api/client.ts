@@ -2,6 +2,7 @@ import {
   googleAuthUrlSchema,
   googleConnectionTestSchema,
   googleStatusSchema,
+  dashboardResponseSchema,
   healthResponseSchema,
   inventoryItemResponseSchema,
   inventoryListResponseSchema,
@@ -15,6 +16,16 @@ import {
   skuListResponseSchema,
   skuResponseSchema,
   supplierListResponseSchema,
+  allocationListResponseSchema,
+  allocationResponseSchema,
+  supplierRequestListResponseSchema,
+  supplierRequestResponseSchema,
+  whatsappQrSchema,
+  whatsappStatusSchema,
+  type CancelAllocationRequest,
+  type BulkCreateSupplierRequests,
+  type CreateAllocationRequest,
+  type CreateSupplierRequest,
   type CreateSkuRequest,
   type CreateOrderRequest,
   type CreateReceiptRequest,
@@ -44,6 +55,9 @@ export const getHealth = async () => {
   const response = await api.get("/health");
   return healthResponseSchema.parse(response.data);
 };
+
+export const getDashboard = async () =>
+  dashboardResponseSchema.parse((await api.get("/dashboard")).data).data;
 
 export const getGoogleStatus = async () =>
   googleStatusSchema.parse((await api.get("/google/status")).data).data;
@@ -121,6 +135,43 @@ export const runOrderStockCheck = async (orderId: string) =>
     (await api.post(`/orders/${encodeURIComponent(orderId)}/stock-check`)).data,
   ).data;
 
+export const shipOrder = async (orderId: string) =>
+  orderResponseSchema.parse(
+    (await api.post(`/orders/${encodeURIComponent(orderId)}/ship`)).data,
+  ).data;
+
+export const listAllocations = async (orderId?: string) =>
+  allocationListResponseSchema.parse(
+    (await api.get("/allocations", { params: orderId ? { orderId } : {} }))
+      .data,
+  ).data;
+
+export const allocateOrderStock = async (
+  orderId: string,
+  input: CreateAllocationRequest,
+) =>
+  allocationResponseSchema.parse(
+    (
+      await api.post(`/orders/${encodeURIComponent(orderId)}/allocate`, input, {
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+      })
+    ).data,
+  ).data;
+
+export const cancelAllocation = async (
+  allocationId: string,
+  input: CancelAllocationRequest,
+) =>
+  allocationResponseSchema.parse(
+    (
+      await api.post(
+        `/allocations/${encodeURIComponent(allocationId)}/cancel`,
+        input,
+        { headers: { "Idempotency-Key": crypto.randomUUID() } },
+      )
+    ).data,
+  ).data;
+
 async function fetchOpenOrderOptions(sku: string) {
   return openOrderOptionsResponseSchema.parse(
     (await api.get(`/receiving/open-order-options/${encodeURIComponent(sku)}`))
@@ -161,6 +212,75 @@ export const listSuppliers = (sku: string) => {
   supplierRequests.set(key, request);
   return request;
 };
+
+export const listSupplierRequests = async (pending = false) =>
+  supplierRequestListResponseSchema.parse(
+    (await api.get(`/supplier-requests${pending ? "/pending" : ""}`)).data,
+  ).data;
+
+export const createSupplierRequest = async (input: CreateSupplierRequest) =>
+  supplierRequestResponseSchema.parse(
+    (
+      await api.post("/supplier-requests", input, {
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+      })
+    ).data,
+  ).data;
+
+export const createBulkSupplierRequests = async (
+  input: BulkCreateSupplierRequests,
+) =>
+  supplierRequestListResponseSchema.parse(
+    (
+      await api.post("/supplier-requests/bulk", input, {
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+        timeout: 0,
+      })
+    ).data,
+  ).data;
+
+const updateSupplierRequest = async (
+  requestId: string,
+  action: string,
+  notes = "",
+) =>
+  supplierRequestResponseSchema.parse(
+    (
+      await api.post(
+        `/supplier-requests/${encodeURIComponent(requestId)}/${action}`,
+        { notes },
+      )
+    ).data,
+  ).data;
+
+export const markSupplierRequestConfirmed = (requestId: string, notes = "") =>
+  updateSupplierRequest(requestId, "mark-confirmed", notes);
+
+export const markSupplierRequestReceived = (requestId: string, notes = "") =>
+  updateSupplierRequest(requestId, "mark-received", notes);
+
+export const disableSupplierFollowUps = (requestId: string, notes = "") =>
+  updateSupplierRequest(requestId, "disable-followups", notes);
+
+export const sendSupplierFollowUp = (requestId: string) =>
+  updateSupplierRequest(requestId, "send-followup");
+
+export const retrySupplierRequest = (requestId: string) =>
+  updateSupplierRequest(requestId, "retry");
+
+export const sendDueSupplierFollowUps = async () =>
+  supplierRequestListResponseSchema.parse(
+    (await api.post("/supplier-requests/send-due-followups")).data,
+  ).data;
+
+export const getWhatsAppStatus = async () =>
+  whatsappStatusSchema.parse((await api.get("/whatsapp/status")).data).data;
+
+export const connectWhatsApp = async () =>
+  whatsappStatusSchema.parse((await api.post("/whatsapp/connect")).data).data;
+
+export const getWhatsAppQr = async () =>
+  whatsappQrSchema.parse((await api.get("/whatsapp/qr")).data).data.qr;
 
 const recentReceiptRequests = new Map<
   number,

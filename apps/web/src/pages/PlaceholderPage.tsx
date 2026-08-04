@@ -26,7 +26,6 @@ export const PlaceholderPage = () => {
 
   return (
     <section className="placeholder">
-      <span className="eyebrow">Module placeholder</span>
       <h1>{title}</h1>
       <p>{copy}</p>
       <a href="/">← Back to dashboard</a>

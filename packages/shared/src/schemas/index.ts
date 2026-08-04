@@ -6,3 +6,6 @@ export * from "./inventory.js";
 export * from "./order.js";
 export * from "./packing.js";
 export * from "./receiving.js";
+export * from "./allocation.js";
+export * from "./supplier-request.js";
+export * from "./dashboard.js";

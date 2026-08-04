@@ -67,6 +67,8 @@ class FakePackingRepository implements PackingRepository {
 
 const linkedOrder: Order = {
   orderId: "ORD-2026-0001",
+  status: "PENDING",
+  completedAt: null,
   customerName: "ABC Traders",
   dateReceived: "2026-08-04",
   orderNotes: "",
@@ -114,6 +116,10 @@ describe("PackingService", () => {
       {
         list: async () => [],
         recordAllocation: async () => ({
+          requiredQuantity: 0,
+          reservedQuantity: 0,
+        }),
+        adjustAllocation: async () => ({
           requiredQuantity: 0,
           reservedQuantity: 0,
         }),
@@ -165,6 +171,10 @@ describe("PackingService", () => {
           recordedQuantity = quantity;
           return { requiredQuantity: 40, reservedQuantity: quantity };
         },
+        adjustAllocation: async () => ({
+          requiredQuantity: 40,
+          reservedQuantity: 0,
+        }),
       },
     );
     const started = await service.start({

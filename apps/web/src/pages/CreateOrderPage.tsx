@@ -6,6 +6,7 @@ import {
 } from "@kv-infra/shared";
 
 import { apiErrorMessage, createOrder, listSkus } from "../api/client";
+import { formatDecimal } from "../lib/format-number";
 
 type DraftLine = { sku: string; skuQuery: string; cartons: number };
 
@@ -126,7 +127,6 @@ export const CreateOrderPage = () => {
       </a>
       <div className="page-title-row">
         <div>
-          <span className="eyebrow">Customer demand</span>
           <h1>New order</h1>
         </div>
       </div>
@@ -280,7 +280,9 @@ export const CreateOrderPage = () => {
                 <span>{calculated?.skuDetails.quantityPerCarton ?? "—"}</span>
                 <strong>{calculated?.totalQuantity ?? "—"}</strong>
                 <span>{calculated?.grossWeight ?? "—"}</span>
-                <span>{calculated?.volume ?? "—"}</span>
+                <span>
+                  {calculated ? formatDecimal(calculated.volume) : "—"}
+                </span>
                 <button
                   type="button"
                   className="text-button danger-text"
@@ -313,7 +315,7 @@ export const CreateOrderPage = () => {
           </div>
           <div>
             <span>Volume</span>
-            <strong>{totals.volume.toFixed(6)} CBM</strong>
+            <strong>{formatDecimal(totals.volume)} CBM</strong>
           </div>
         </div>
         {message && <div className="notice error-notice">{message}</div>}

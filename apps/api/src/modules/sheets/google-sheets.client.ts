@@ -5,6 +5,8 @@ import {
   QA_LOG_HEADERS,
   RECEIVING_LOG_HEADERS,
   SUPPLIER_MASTER_HEADERS,
+  SUPPLIER_REQUEST_HEADERS,
+  WHATSAPP_LOG_HEADERS,
 } from "@kv-infra/shared";
 
 import { env } from "../../config/env.js";
@@ -16,6 +18,38 @@ type ValueInputOption = "RAW" | "USER_ENTERED";
 const SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
 
 const quoteSheet = (name: string) => `'${name.replaceAll("'", "''")}'`;
+
+export const sheetNameFromA1Range = (range: string) => {
+  const separator = range.lastIndexOf("!");
+  if (separator < 0) return null;
+  const sheet = range.slice(0, separator);
+  return sheet.startsWith("'") && sheet.endsWith("'")
+    ? sheet.slice(1, -1).replaceAll("''", "'")
+    : sheet;
+};
+
+type DataFilterValueRange = {
+  dataFilters?: Array<{ a1Range?: string }>;
+  valueRange?: { range?: string; values?: unknown[][] };
+};
+
+export const alignValueRangesToSheets = (
+  sheetNames: string[],
+  valueRanges: DataFilterValueRange[],
+) => {
+  const rowsBySheet = new Map<string, unknown[][]>();
+  valueRanges.forEach((entry) => {
+    const ranges = [
+      entry.valueRange?.range,
+      ...(entry.dataFilters?.map((filter) => filter.a1Range) ?? []),
+    ];
+    const sheetName = ranges.flatMap((range) =>
+      range ? [sheetNameFromA1Range(range)] : [],
+    )[0];
+    if (sheetName) rowsBySheet.set(sheetName, entry.valueRange?.values ?? []);
+  });
+  return sheetNames.map((name) => rowsBySheet.get(name) ?? []);
+};
 
 export const assertExactHeaders = (
   actual: unknown[],
@@ -53,7 +87,10 @@ export class GoogleSheetsClient {
   async readMultipleRows(spreadsheetId: string, sheetNames: string[]) {
     if (sheetNames.length === 0) return [];
     const result = await this.request<{
-      valueRanges?: Array<{ valueRange?: { values?: unknown[][] } }>;
+      valueRanges?: Array<{
+        dataFilters?: Array<{ a1Range?: string }>;
+        valueRange?: { range?: string; values?: unknown[][] };
+      }>;
     }>(`${SHEETS_API}/${spreadsheetId}/values:batchGetByDataFilter`, {
       method: "POST",
       body: JSON.stringify({
@@ -63,9 +100,7 @@ export class GoogleSheetsClient {
         })),
       }),
     });
-    return sheetNames.map(
-      (_name, index) => result.valueRanges?.[index]?.valueRange?.values ?? [],
-    );
+    return alignValueRangesToSheets(sheetNames, result.valueRanges ?? []);
   }
 
   async appendRow(
@@ -221,6 +256,8 @@ export class GoogleSheetsClient {
       [env.RECEIVING_LOG_SHEET_NAME, RECEIVING_LOG_HEADERS],
       [env.QA_LOG_SHEET_NAME, QA_LOG_HEADERS],
       [env.ORDER_ALLOCATIONS_SHEET_NAME, ORDER_ALLOCATION_HEADERS],
+      [env.SUPPLIER_REQUESTS_SHEET_NAME, SUPPLIER_REQUEST_HEADERS],
+      [env.WHATSAPP_LOG_SHEET_NAME, WHATSAPP_LOG_HEADERS],
     ] as const;
     for (const [sheetName, headers] of requiredSheets)
       await this.verifyContractSheet(

@@ -33,7 +33,6 @@ export const InventoryPage = () => {
     <section className="page-panel">
       <div className="page-title-row">
         <div>
-          <span className="eyebrow">Warehouse position</span>
           <h1>Inventory</h1>
         </div>
         <span>{items.length} active SKUs</span>

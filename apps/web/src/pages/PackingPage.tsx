@@ -23,8 +23,7 @@ export const PackingPage = () => {
     <section className="page-panel">
       <div className="page-title-row orders-title-row">
         <div>
-          <span className="eyebrow">Warehouse workflow</span>
-          <h1>Packing / QA</h1>
+          <h1>Packing</h1>
         </div>
         <a className="primary-button create-order-link" href="/packing/start">
           + Start new packing

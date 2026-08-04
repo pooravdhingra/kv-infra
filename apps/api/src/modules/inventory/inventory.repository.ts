@@ -17,6 +17,10 @@ export interface InventoryRepository {
   update(record: InventorySourceRecord): Promise<void>;
 }
 
+export type InventoryShipmentRepository = Pick<InventoryRepository, "list"> & {
+  updateMany(records: InventorySourceRecord[]): Promise<void>;
+};
+
 export const inventoryRecordValues = (record: InventorySourceRecord) => [
   record.sku,
   record.itemDescription,
@@ -111,6 +115,16 @@ export class GoogleSheetsInventoryRepository implements InventoryRepository {
       env.INVENTORY_SHEET_NAME,
       record.rowNumber,
       inventoryRecordValues(record),
+    );
+  }
+
+  async updateMany(records: InventorySourceRecord[]) {
+    await this.sheets.batchUpdateRanges(
+      spreadsheetId(),
+      records.map((record) => ({
+        range: `'${env.INVENTORY_SHEET_NAME.replaceAll("'", "''")}'!A${record.rowNumber}`,
+        values: [inventoryRecordValues(record)],
+      })),
     );
   }
 }

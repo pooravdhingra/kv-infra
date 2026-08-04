@@ -49,4 +49,4 @@ Carton dimensions are stored in centimetres. Volume is cubic metres:
 
 `LENGTH × BREADTH × HEIGHT × NO OF CTNS / 1,000,000`.
 
-Carton weight is stored and displayed in kilograms. New SKU identifiers are assigned automatically using the sequential `KV-NNNNNN` convention.
+Carton weight is stored and displayed in kilograms. New SKU identifiers are assigned automatically in independent OEM sequences: `B` for Bajaj, `T` for TVS, `P` for Piaggio, and `X` for Other. Existing identifiers remain unchanged.

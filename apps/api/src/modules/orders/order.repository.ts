@@ -17,6 +17,11 @@ export interface OrderRepository {
     values: unknown[][],
   ): Promise<{ sheetId: number; title: string }>;
   updateStockCheck(title: string, items: OrderLine[]): Promise<void>;
+  completeOrder(
+    title: string,
+    lineCount: number,
+    completedAt: string,
+  ): Promise<void>;
   updateLineState(
     title: string,
     rowNumber: number,
@@ -82,10 +87,14 @@ export class GoogleSheetsOrderRepository implements OrderRepository {
         const row = index + 2;
         const status =
           item.remainingQuantity === 0
-            ? "READY"
+            ? "FULLY RESERVED"
             : item.stockStatus.replaceAll("_", " ");
         return [
           { range: `'${escaped}'!J${row}`, values: [[status]] },
+          {
+            range: `'${escaped}'!R${row}`,
+            values: [[item.reservedQuantity]],
+          },
           {
             range: `'${escaped}'!S${row}`,
             values: [[item.shortfallQuantity]],
@@ -94,6 +103,20 @@ export class GoogleSheetsOrderRepository implements OrderRepository {
         ];
       }),
     );
+  }
+
+  async completeOrder(title: string, lineCount: number, completedAt: string) {
+    const escaped = title.replaceAll("'", "''");
+    await this.sheets.batchUpdateRanges(spreadsheetId(), [
+      {
+        range: `'${escaped}'!J2:J${lineCount + 1}`,
+        values: Array.from({ length: lineCount }, () => ["SHIPPED"]),
+      },
+      {
+        range: `'${escaped}'!U2:U${lineCount + 1}`,
+        values: Array.from({ length: lineCount }, () => [completedAt]),
+      },
+    ]);
   }
 
   async updateLineState(

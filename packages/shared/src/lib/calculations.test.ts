@@ -1,14 +1,42 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  assignInventoryTransition,
+  cancelInventoryAssignmentTransition,
   calculateInventoryTotals,
   calculateOrderLineTotals,
   calculateStockCheck,
   finishPackingTransition,
   getSuggestedAction,
   receiveInventoryTransition,
+  shipInventoryTransition,
   startPackingTransition,
 } from "./calculations.js";
+
+describe("assignment calculations", () => {
+  it("assigns available packed stock and reverses it safely", () => {
+    expect(
+      assignInventoryTransition({
+        quantityPerCarton: 100,
+        packedCartons: 6,
+        totalAssigned: 100,
+        quantityAssigned: 200,
+      }),
+    ).toBe(300);
+    expect(
+      cancelInventoryAssignmentTransition({
+        totalAssigned: 300,
+        quantityCancelled: 200,
+      }),
+    ).toBe(100);
+    expect(() =>
+      cancelInventoryAssignmentTransition({
+        totalAssigned: 100,
+        quantityCancelled: 200,
+      }),
+    ).toThrow("exceeds total assigned stock");
+  });
+});
 
 describe("inventory calculations", () => {
   it("excludes unpacked stock and subtracts assigned stock", () => {
@@ -20,6 +48,38 @@ describe("inventory calculations", () => {
 
   it("rejects over-assignment", () => {
     expect(() => calculateInventoryTotals(10, 2, 21)).toThrow(RangeError);
+  });
+});
+
+describe("shipping calculations", () => {
+  it("consumes packed cartons and their assignment without changing availability", () => {
+    const shipped = shipInventoryTransition({
+      quantityPerCarton: 75,
+      packedCartons: 120,
+      totalAssigned: 8000,
+      shippedQuantity: 7500,
+    });
+    expect(shipped).toEqual({ packedCartons: 20, totalAssigned: 500 });
+    expect(calculateInventoryTotals(75, 20, 500).availableQuantity).toBe(1000);
+  });
+
+  it("rejects incomplete cartons or stock not assigned to the order", () => {
+    expect(() =>
+      shipInventoryTransition({
+        quantityPerCarton: 75,
+        packedCartons: 100,
+        totalAssigned: 7500,
+        shippedQuantity: 7400,
+      }),
+    ).toThrow("complete cartons");
+    expect(() =>
+      shipInventoryTransition({
+        quantityPerCarton: 75,
+        packedCartons: 100,
+        totalAssigned: 7000,
+        shippedQuantity: 7500,
+      }),
+    ).toThrow("assigned stock");
   });
 });
 

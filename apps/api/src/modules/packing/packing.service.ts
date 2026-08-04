@@ -28,7 +28,10 @@ export class PackingService {
   constructor(
     private readonly repository: PackingRepository,
     private readonly inventoryRepository: InventoryRepository,
-    private readonly orders: Pick<OrderService, "list" | "recordAllocation">,
+    private readonly orders: Pick<
+      OrderService,
+      "list" | "recordAllocation" | "adjustAllocation"
+    >,
   ) {}
 
   private async sessionFromEvent(event: PackingEvent) {
@@ -277,23 +280,33 @@ export class PackingService {
       status: "FINISHED",
       notes: request.notes,
     };
-    await this.repository.commitFinish(
-      this.eventRow(finished),
-      {
-        ...current,
-        ...movement,
-        totalAssigned: nextAssigned,
-        lastPackedDate: request.date,
-        lastUpdated: new Date().toISOString(),
-      },
-      allocationRow,
-    );
     if (started.orderId && started.orderLineId && assignedQuantity > 0)
       await this.orders.recordAllocation(
         started.orderId,
         started.orderLineId,
         assignedQuantity,
       );
+    try {
+      await this.repository.commitFinish(
+        this.eventRow(finished),
+        {
+          ...current,
+          ...movement,
+          totalAssigned: nextAssigned,
+          lastPackedDate: request.date,
+          lastUpdated: new Date().toISOString(),
+        },
+        allocationRow,
+      );
+    } catch (error) {
+      if (started.orderId && started.orderLineId && assignedQuantity > 0)
+        await this.orders.adjustAllocation(
+          started.orderId,
+          started.orderLineId,
+          -assignedQuantity,
+        );
+      throw error;
+    }
     const session = packingSessionSchema.parse({
       ...finished,
       unit: current.unit,

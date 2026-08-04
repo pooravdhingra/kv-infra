@@ -4,6 +4,9 @@ import type { Order } from "@kv-infra/shared";
 import { apiErrorMessage, listOrders } from "../api/client";
 
 const readiness = (order: Order) => {
+  if (order.items.every((item) => item.stockStatus === "FULLY_RESERVED")) {
+    return { label: "Fully reserved", className: "fully_reserved" };
+  }
   if (order.items.some((item) => item.stockStatus === "NEEDS_SUPPLIER")) {
     return { label: "Needs supplier", className: "needs_supplier" };
   }
@@ -15,6 +18,9 @@ const readiness = (order: Order) => {
 
 export const OrdersPage = () => {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [activeTab, setActiveTab] = useState<"pending" | "completed">(
+    "pending",
+  );
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
@@ -24,15 +30,17 @@ export const OrdersPage = () => {
       .catch((error) => setMessage(apiErrorMessage(error)))
       .finally(() => setLoading(false));
   }, []);
-  const pendingOrders = orders.filter((order) =>
-    order.items.some((item) => item.remainingQuantity > 0),
+  const pendingOrders = orders.filter((order) => order.status === "PENDING");
+  const completedOrders = orders.filter(
+    (order) => order.status === "COMPLETED",
   );
+  const visibleOrders =
+    activeTab === "pending" ? pendingOrders : completedOrders;
 
   return (
     <section className="page-panel">
       <div className="page-title-row orders-title-row">
         <div>
-          <span className="eyebrow">Customer demand</span>
           <h1>Orders</h1>
         </div>
         <a className="primary-button create-order-link" href="/orders/new">
@@ -40,12 +48,23 @@ export const OrdersPage = () => {
         </a>
       </div>
 
-      <div className="section-heading orders-heading">
-        <h2>Pending orders</h2>
-        <span>
-          {pendingOrders.length}{" "}
-          {pendingOrders.length === 1 ? "order" : "orders"}
-        </span>
+      <div className="order-tabs" role="tablist" aria-label="Order status">
+        <button
+          className={activeTab === "pending" ? "is-active" : ""}
+          role="tab"
+          aria-selected={activeTab === "pending"}
+          onClick={() => setActiveTab("pending")}
+        >
+          Pending orders <span>{pendingOrders.length}</span>
+        </button>
+        <button
+          className={activeTab === "completed" ? "is-active" : ""}
+          role="tab"
+          aria-selected={activeTab === "completed"}
+          onClick={() => setActiveTab("completed")}
+        >
+          Completed orders <span>{completedOrders.length}</span>
+        </button>
       </div>
       {message && <div className="notice error-notice">{message}</div>}
       {loading ? (
@@ -61,8 +80,11 @@ export const OrdersPage = () => {
             <span>Stock status</span>
             <span />
           </div>
-          {pendingOrders.map((order) => {
-            const status = readiness(order);
+          {visibleOrders.map((order) => {
+            const status =
+              order.status === "COMPLETED"
+                ? { label: "Shipped", className: "shipped" }
+                : readiness(order);
             return (
               <div className="orders-row" role="row" key={order.orderId}>
                 <strong>{order.orderId}</strong>
@@ -82,8 +104,8 @@ export const OrdersPage = () => {
               </div>
             );
           })}
-          {pendingOrders.length === 0 && (
-            <div className="table-empty">No pending orders found.</div>
+          {visibleOrders.length === 0 && (
+            <div className="table-empty">No {activeTab} orders found.</div>
           )}
         </div>
       )}

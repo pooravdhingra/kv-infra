@@ -1,3 +1,3 @@
 # API modules
 
-Each feature gets a folder containing its route, validation schema, service/business logic, and adapter calls. Planned modules: auth, google, sheets, sku, orders, inventory, receiving, packing, suppliers, and whatsapp.
+Each feature has a route, shared validation schema, service/business logic, and replaceable adapter or repository. Implemented modules cover the operator dashboard, Google/Sheets, SKUs, orders, inventory, receiving, packing, allocations, suppliers, supplier requests, and WhatsApp. Authentication remains a later module.

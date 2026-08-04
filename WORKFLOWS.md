@@ -1,8 +1,12 @@
 # Workflows
 
+## Operator dashboard
+
+Load one prioritized queue from current orders, supplier requests, packing sessions, and recent receipts. Show failed WhatsApp sends and due follow-ups first, followed by in-packing work, ready-to-ship orders, unrequested supplier shortfalls, packing needs, and stock ready to reserve. Keep current pending orders and recent operational activity directly browsable. This is an action summary, not an analytics or forecasting layer.
+
 ## Create SKU
 
-Generate the next sequential `KV-NNNNNN` identifier, append to `PACKING MASTER LIST`, then create a zero-valued `INVENTORY` row with the same identifier. Legacy SKU formats remain readable but do not affect the generated sequence.
+Require the operator to choose Bajaj, TVS, Piaggio, or Other when creating a SKU. Generate the next identifier in that OEM's independent `KV-BNNNNNN`, `KV-TNNNNNN`, `KV-PNNNNNN`, or `KV-XNNNNNN` sequence, append to `PACKING MASTER LIST`, then create a zero-valued `INVENTORY` row with the same identifier. Legacy SKU formats remain readable and unchanged but do not affect OEM sequences.
 
 ## Delete SKU
 
@@ -11,6 +15,8 @@ After explicit operator confirmation, archive the matching Packing Master and In
 ## Create order and stock check
 
 Generate `ORD-YYYY-NNNN` and stable line IDs, create a collision-safe `Customer - DD Mon YYYY` order tab, copy SKU master fields, and write visible formulas for quantity, gross weight, and CBM. Compare each line's required quantity with packed available and unpacked quantities. A refresh rewrites stock status, shortfall, and last-updated cells but never assigns stock.
+
+List every created order as pending until an operator ships it. Show **Ship order** only when every line is fully packed and reserved. On confirmation, consume the exact packed cartons and matching assignments from Inventory, write `SHIPPED` and one completion timestamp to every line, remove the order from Pending Orders, and retain it in the browsable Completed Orders tab. Compensate Inventory if the order-tab completion write fails. Do not allow stock refreshes or allocation changes after completion.
 
 ## View and correct inventory
 
@@ -30,8 +36,36 @@ Subtract the amount taken from `IN PACKING QTY`, add good complete cartons to `P
 
 ## Assign and cancel assignment
 
-Assignment requires packed available stock. Append an allocation and increase `TOTAL ASSIGNED`. Cancellation records a compensating event/note and decreases the assigned total; it does not delete history.
+Assignment requires packed available stock. Append an allocation and increase `TOTAL ASSIGNED`. When a line's remaining quantity reaches zero, mark it `FULLY RESERVED`, clear its shortfall, and suppress supplier action. Cancellation records a compensating event/note and decreases the assigned total; it does not delete history.
+
+Direct reservation is available on order detail and cannot exceed either packed available stock or the exact line's remaining quantity. Cancellation requires an operator reason and appends a negative allocation event whose notes identify the original allocation.
+
+For orders with multiple supplier shortfalls, offer a grouped review page. Preselect each SKU's highest-priority configured supplier and generate one editable message per eligible line. Require an explicit approval checkbox on every message before enabling **Send all approved**. After submission, group items by the operator-approved supplier number, combine same-supplier items into one numbered WhatsApp message, keep one request row per line, and wait a random 5–55 seconds between distinct supplier messages.
+
+The allocation ledger is authoritative for active reserved quantity. Order reads calculate `RESERVED QTY` from its positive and compensating negative events, and a stock-check repairs stale order cells. If a historical cross-spreadsheet write left `RESERVED QTY` stale, cancellation releases the active ledger quantity from Inventory. New allocation flows update the order first and compensate it if the master-sheet batch fails.
 
 ## Supplier request and follow-up
 
 Create a request for the current shortfall, select a supplier by priority, send the initial message, and append `WHATSAPP LOG`. A request is due when auto-follow-up is enabled, its status is not received, and current time reaches `NEXT FOLLOW-UP AT`. Each successful message schedules the next for three days later. Automated retries must not send twice on the same calendar day.
+
+Initial message template:
+
+```text
+Hello Bhaiya, how are you? Please note new order:
+
+1. FLANGE BIG COMPACT - 1000 PCS
+
+Kab tak bhijva sakte ho?
+```
+
+Follow-up template:
+
+```text
+Hello Bhaiya, ye items pending hain:
+
+1. abc - 1000 pcs
+
+kab tak bhijvaoge?
+```
+
+The initial message is editable before send. Follow-ups use the fixed approved wording. Failed attempts are append-logged and remain available for retry. An explicitly linked receipt may optionally send a delivery confirmation; its send result never controls whether physically received stock is recorded.

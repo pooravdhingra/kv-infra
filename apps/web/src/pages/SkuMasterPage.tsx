@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { skuUnits, type Sku } from "@kv-infra/shared";
+import { skuOems, skuUnits, type Sku, type SkuOem } from "@kv-infra/shared";
 
 import {
   apiErrorMessage,
@@ -31,6 +31,7 @@ const numberFields = [
 export const SkuMasterPage = () => {
   const [skus, setSkus] = useState<Sku[]>([]);
   const [form, setForm] = useState<Sku>(emptySku);
+  const [oem, setOem] = useState<SkuOem>("Bajaj");
   const [editing, setEditing] = useState(false);
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
@@ -62,10 +63,11 @@ export const SkuMasterPage = () => {
         setMessage(`${sku} updated.`);
       } else {
         const { sku: _sku, ...details } = form;
-        const created = await createSku(details);
+        const created = await createSku({ ...details, oem });
         setMessage(`${created.sku} created with its inventory row.`);
       }
       setForm(emptySku);
+      setOem("Bajaj");
       setEditing(false);
       await load();
     } catch (error) {
@@ -108,7 +110,6 @@ export const SkuMasterPage = () => {
     <section className="page-panel">
       <div className="page-title-row">
         <div>
-          <span className="eyebrow">Packing master</span>
           <h1>SKU master</h1>
         </div>
         <span>{skus.length} SKUs</span>
@@ -200,6 +201,19 @@ export const SkuMasterPage = () => {
               <label>
                 SKU
                 <input value={form.sku} disabled />
+              </label>
+            )}
+            {!editing && (
+              <label>
+                OEM
+                <select
+                  value={oem}
+                  onChange={(event) => setOem(event.target.value as SkuOem)}
+                >
+                  {skuOems.map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
               </label>
             )}
             <label>

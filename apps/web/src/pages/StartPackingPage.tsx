@@ -94,7 +94,6 @@ export const StartPackingPage = () => {
           ← Packing
         </a>
       </div>
-      <span className="eyebrow">Move unpacked stock</span>
       <h1>Start packing</h1>
       <form className="sku-form workflow-form" onSubmit={submit}>
         <label>

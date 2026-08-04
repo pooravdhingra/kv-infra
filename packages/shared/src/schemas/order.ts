@@ -7,6 +7,7 @@ export const orderStockStatuses = [
   "READY_TO_RESERVE",
   "NEEDS_PACKING",
   "NEEDS_SUPPLIER",
+  "FULLY_RESERVED",
 ] as const;
 
 export const createOrderRequestSchema = z.object({
@@ -52,6 +53,8 @@ export const orderLineSchema = z.object({
 
 export const orderSchema = z.object({
   orderId: z.string(),
+  status: z.enum(["PENDING", "COMPLETED"]),
+  completedAt: z.string().datetime().nullable(),
   customerName: z.string(),
   dateReceived: z.string().date(),
   orderNotes: z.string(),

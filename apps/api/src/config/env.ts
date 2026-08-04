@@ -31,6 +31,19 @@ const envSchema = z.object({
   RECEIVING_LOG_SHEET_NAME: z.string().default("RECEIVING LOG"),
   QA_LOG_SHEET_NAME: z.string().default("QA LOG"),
   ORDER_ALLOCATIONS_SHEET_NAME: z.string().default("ORDER ALLOCATIONS"),
+  SUPPLIER_REQUESTS_SHEET_NAME: z.string().default("SUPPLIER REQUESTS"),
+  WHATSAPP_LOG_SHEET_NAME: z.string().default("WHATSAPP LOG"),
+  BAILEYS_AUTH_DIR: z.string().default(".secrets/baileys-auth"),
+  OPERATOR_TIME_ZONE: z.string().default("Asia/Kolkata"),
+  AUTO_FOLLOWUPS_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  FOLLOW_UP_POLL_MINUTES: z.coerce.number().int().min(5).default(60),
+  WHATSAPP_DEFAULT_COUNTRY_CODE: z
+    .string()
+    .regex(/^\d{1,3}$/)
+    .default("91"),
   SESSION_SECRET: z.string().default(""),
   TOKEN_ENCRYPTION_KEY: z.string().default(""),
 });

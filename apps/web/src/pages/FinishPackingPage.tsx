@@ -75,7 +75,6 @@ export const FinishPackingPage = ({ packingId }: { packingId: string }) => {
           ← Packing
         </a>
       </div>
-      <span className="eyebrow">{session.packingId}</span>
       <h1>Finish packing</h1>
       <div className="metric-grid">
         <div>

@@ -31,12 +31,24 @@ import { SkuService } from "./modules/sku/sku.service.js";
 import { createSupplierRouter } from "./modules/suppliers/supplier.routes.js";
 import { GoogleSheetsSupplierRepository } from "./modules/suppliers/supplier.repository.js";
 import { SupplierService } from "./modules/suppliers/supplier.service.js";
+import { createAllocationRouter } from "./modules/allocations/allocation.routes.js";
+import { GoogleSheetsAllocationRepository } from "./modules/allocations/allocation.repository.js";
+import { AllocationService } from "./modules/allocations/allocation.service.js";
+import { createSupplierRequestRouter } from "./modules/supplier-requests/supplier-request.routes.js";
+import { GoogleSheetsSupplierRequestRepository } from "./modules/supplier-requests/supplier-request.repository.js";
+import { SupplierRequestService } from "./modules/supplier-requests/supplier-request.service.js";
+import { BaileysWhatsAppAdapter } from "./modules/whatsapp/whatsapp.adapter.js";
+import { createWhatsAppRouter } from "./modules/whatsapp/whatsapp.routes.js";
+import { GoogleSheetsWhatsAppLogRepository } from "./modules/whatsapp/whatsapp.repository.js";
+import { WhatsAppService } from "./modules/whatsapp/whatsapp.service.js";
+import { createDashboardRouter } from "./modules/dashboard/dashboard.routes.js";
+import { DashboardService } from "./modules/dashboard/dashboard.service.js";
 
 export const createHealthResponse = () => ({
   data: {
     status: "ok" as const,
     service: "api" as const,
-    version: "0.8.1",
+    version: "0.11.0",
     timestamp: new Date().toISOString(),
   },
 });
@@ -59,15 +71,13 @@ export const createApp = () => {
   const skuService = new SkuService(skuRepository);
   const inventoryRepository = new GoogleSheetsInventoryRepository(sheets);
   const inventoryService = new InventoryService(inventoryRepository);
+  const allocationRepository = new GoogleSheetsAllocationRepository(sheets);
   const orderService = new OrderService(
     new GoogleSheetsOrderRepository(sheets),
     skuRepository,
     inventoryService,
-  );
-  const receivingService = new ReceivingService(
-    new GoogleSheetsReceivingRepository(sheets),
+    allocationRepository,
     inventoryRepository,
-    orderService,
   );
   const packingService = new PackingService(
     new GoogleSheetsPackingRepository(sheets),
@@ -77,14 +87,75 @@ export const createApp = () => {
   const supplierService = new SupplierService(
     new GoogleSheetsSupplierRepository(sheets),
   );
+  const whatsappLogRepository = new GoogleSheetsWhatsAppLogRepository(sheets);
+  const whatsappAdapter = new BaileysWhatsAppAdapter();
+  const whatsappService = new WhatsAppService(
+    whatsappAdapter,
+    whatsappLogRepository,
+  );
+  const supplierRequestRepository = new GoogleSheetsSupplierRequestRepository(
+    sheets,
+  );
+  const supplierRequestService = new SupplierRequestService(
+    supplierRequestRepository,
+    orderService,
+    supplierService,
+    whatsappService,
+    whatsappLogRepository,
+  );
+  const receivingService = new ReceivingService(
+    new GoogleSheetsReceivingRepository(sheets),
+    inventoryRepository,
+    orderService,
+    supplierRequestService,
+  );
+  const allocationService = new AllocationService(
+    allocationRepository,
+    inventoryRepository,
+    orderService,
+  );
+  const dashboardService = new DashboardService(
+    orderService,
+    packingService,
+    supplierRequestRepository,
+    receivingService,
+  );
 
+  app.use(`${API_PREFIX}/dashboard`, createDashboardRouter(dashboardService));
   app.use(`${API_PREFIX}/google`, createGoogleRouter(oauth, sheets));
   app.use(`${API_PREFIX}/skus`, createSkuRouter(skuService));
   app.use(`${API_PREFIX}/inventory`, createInventoryRouter(inventoryService));
-  app.use(`${API_PREFIX}/orders`, createOrderRouter(orderService));
+  app.use(
+    `${API_PREFIX}/orders`,
+    createOrderRouter(orderService, allocationService),
+  );
+  app.use(
+    `${API_PREFIX}/allocations`,
+    createAllocationRouter(allocationService),
+  );
   app.use(`${API_PREFIX}/receiving`, createReceivingRouter(receivingService));
   app.use(`${API_PREFIX}/packing`, createPackingRouter(packingService));
   app.use(`${API_PREFIX}/suppliers`, createSupplierRouter(supplierService));
+  app.use(
+    `${API_PREFIX}/supplier-requests`,
+    createSupplierRequestRouter(supplierRequestService),
+  );
+  app.use(`${API_PREFIX}/whatsapp`, createWhatsAppRouter(whatsappService));
+
+  if (env.NODE_ENV !== "test" && env.AUTO_FOLLOWUPS_ENABLED) {
+    if (whatsappAdapter.hasSavedSession())
+      void whatsappService.connect().catch(() => {});
+    const initialCheck = setTimeout(
+      () => void supplierRequestService.sendDueFollowUps().catch(() => {}),
+      30_000,
+    );
+    initialCheck.unref();
+    const timer = setInterval(
+      () => void supplierRequestService.sendDueFollowUps().catch(() => {}),
+      env.FOLLOW_UP_POLL_MINUTES * 60_000,
+    );
+    timer.unref();
+  }
 
   app.use((_request, response) => {
     const body: ApiError = {

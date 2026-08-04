@@ -1,6 +1,6 @@
 # Environment, secrets, and Google Sheets setup
 
-This guide configures Phases 2–8 locally without committing credentials or business data.
+This guide configures Phases 2–11 locally without committing credentials or business data.
 
 ## 1. Create the local environment file
 
@@ -70,6 +70,18 @@ If upgrading the earlier 12-column QA tab, insert two columns immediately before
 ALLOCATION ID	ORDER ID	ORDER LINE ID	SKU	ITEM DESCRIPTION	QTY ASSIGNED	NOTES
 ```
 
+### `SUPPLIER REQUESTS`
+
+```text
+REQUEST ID	ORDER ID	ORDER LINE ID	SKU	ITEM DESCRIPTION	REQUIRED QTY	AVAILABLE QTY	SHORTFALL QTY	SELECTED SUPPLIER	SUPPLIER NUMBER	SUPPLIER PRIORITY	LAST MESSAGE AT	NEXT FOLLOW-UP AT	STATUS	AUTO FOLLOW-UP ENABLED	NOTES
+```
+
+### `WHATSAPP LOG`
+
+```text
+MESSAGE ID	REQUEST ID	ORDER ID	SKU	SUPPLIER NAME	SUPPLIER NUMBER	MESSAGE TYPE	MESSAGE BODY	SENT AT	ERROR MESSAGE	FOLLOW-UP NUMBER	NOTES
+```
+
 Find each spreadsheet ID in its URL:
 
 ```text
@@ -114,12 +126,22 @@ INVENTORY_SHEET_NAME=INVENTORY
 RECEIVING_LOG_SHEET_NAME=RECEIVING LOG
 QA_LOG_SHEET_NAME=QA LOG
 ORDER_ALLOCATIONS_SHEET_NAME=ORDER ALLOCATIONS
+SUPPLIER_REQUESTS_SHEET_NAME=SUPPLIER REQUESTS
+WHATSAPP_LOG_SHEET_NAME=WHATSAPP LOG
+
+BAILEYS_AUTH_DIR=.secrets/baileys-auth
+WHATSAPP_DEFAULT_COUNTRY_CODE=91
+OPERATOR_TIME_ZONE=Asia/Kolkata
+AUTO_FOLLOWUPS_ENABLED=true
+FOLLOW_UP_POLL_MINUTES=60
 
 SESSION_SECRET=first-generated-random-value
 TOKEN_ENCRYPTION_KEY=second-generated-random-value
 ```
 
 Keep the default sheet names unless the actual tabs intentionally use different names. Header names remain fixed regardless of tab-name configuration.
+
+`BAILEYS_AUTH_DIR` contains WhatsApp linked-device credentials. Keep it inside `.secrets`, never commit or share it, and restrict access to the operator machine. `WHATSAPP_DEFAULT_COUNTRY_CODE` supplies the country code for local ten-digit Supplier Master numbers (`91` for India); numbers already containing a country code are left intact. `OPERATOR_TIME_ZONE` controls the same-calendar-day duplicate follow-up guard. The scheduler checks hourly by default and sends only while WhatsApp is connected.
 
 ## 5. Connect and test in the UI
 
@@ -133,8 +155,11 @@ npm run dev
 3. Select **Connect Google** and authorize the operator account.
 4. After returning to Settings, select **Test Sheets connection**.
 5. Confirm the master and orders spreadsheet titles appear and both required tabs are verified.
-6. Open `http://localhost:5173/skus`, create a fake SKU, and confirm one row appears in both `PACKING MASTER LIST` and `INVENTORY`.
-7. Edit the fake SKU and confirm the master row and the inventory description/carton/unit fields update without changing inventory quantities.
+6. In Settings, select **Connect WhatsApp** and scan the QR from WhatsApp under **Linked devices → Link a device**.
+7. Open `http://localhost:5173/skus`, create a fake SKU, and confirm one row appears in both `PACKING MASTER LIST` and `INVENTORY`.
+8. Edit the fake SKU and confirm the master row and the inventory description/carton/unit fields update without changing inventory quantities.
+
+For WhatsApp testing, use a controlled non-production supplier number and create only fake orders. A local ten-digit number uses `WHATSAPP_DEFAULT_COUNTRY_CODE`; international numbers should include their country code. Confirm one `SUPPLIER REQUESTS` row and one `WHATSAPP LOG` row appear. Do not copy or commit the files created beneath `BAILEYS_AUTH_DIR`.
 
 Use only fictional data for testing.
 
@@ -154,11 +179,11 @@ Create a fake SKU:
 ```bash
 curl --fail --silent \
   -H 'Content-Type: application/json' \
-  -d '{"itemDescription":"Test carton","quantityPerCarton":100,"unit":"pcs","weightPerCarton":10,"length":50,"breadth":40,"height":30}' \
+  -d '{"oem":"Bajaj","itemDescription":"Test carton","quantityPerCarton":100,"unit":"pcs","weightPerCarton":10,"length":50,"breadth":40,"height":30}' \
   http://localhost:4000/api/skus
 ```
 
-The API assigns the next available identifier using `KV-000001`, `KV-000002`, and so on. Existing legacy SKU formats are ignored when calculating the next sequence number.
+The API assigns the next available identifier in the selected OEM sequence: `B` for Bajaj, `T` for TVS, `P` for Piaggio, and `X` for Other. Existing legacy SKU formats remain untouched and are ignored when calculating each OEM's next sequence number.
 
 ## 7. Automated verification
 

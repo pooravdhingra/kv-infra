@@ -7,6 +7,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 import type { SkuRepository } from "../sku/sku.repository.js";
+import type { AllocationRepository } from "../allocations/allocation.repository.js";
 import type {
   OrderRepository,
   OrderSheetSnapshot,
@@ -47,6 +48,20 @@ class FakeOrderRepository implements OrderRepository {
   sheets: OrderSheetSnapshot[] = [];
   written: unknown[][] = [];
   stockCheckWrites: OrderLine[] = [];
+  completionWrites: Array<{
+    title: string;
+    lineCount: number;
+    completedAt: string;
+  }> = [];
+  lineStateWrites: Array<{
+    title: string;
+    rowNumber: number;
+    input: {
+      status: string;
+      reservedQuantity?: number;
+      supplierRequestStatus?: string;
+    };
+  }> = [];
   async snapshot() {
     return this.sheets;
   }
@@ -57,7 +72,27 @@ class FakeOrderRepository implements OrderRepository {
   async updateStockCheck(_title: string, items: OrderLine[]) {
     this.stockCheckWrites = items;
   }
-  async updateLineState() {}
+  async completeOrder(title: string, lineCount: number, completedAt: string) {
+    this.completionWrites.push({ title, lineCount, completedAt });
+    this.sheets.forEach((sheet) => {
+      if (sheet.title !== title) return;
+      sheet.rows.slice(1, lineCount + 1).forEach((row) => {
+        row[9] = "SHIPPED";
+        row[20] = completedAt;
+      });
+    });
+  }
+  async updateLineState(
+    title: string,
+    rowNumber: number,
+    input: {
+      status: string;
+      reservedQuantity?: number;
+      supplierRequestStatus?: string;
+    },
+  ) {
+    this.lineStateWrites.push({ title, rowNumber, input });
+  }
 }
 
 const skuRepository: SkuRepository = {
@@ -136,6 +171,127 @@ describe("OrderService", () => {
       stockStatus: "NEEDS_PACKING",
       shortfallQuantity: 400,
     });
+  });
+
+  it("reports no shortfall or supplier action after the line is fully reserved", async () => {
+    const repository = new FakeOrderRepository();
+    const service = new OrderService(
+      repository,
+      skuRepository,
+      inventoryService,
+    );
+    const created = await service.create({
+      customerName: "ABC Traders",
+      dateReceived: "2026-08-04",
+      items: [{ sku: "KV-000001", cartons: 10 }],
+    });
+
+    repository.written[1]![16] = 1000;
+    repository.sheets = [
+      { sheetId: 99, title: created.sheetTitle, rows: repository.written },
+    ];
+
+    const fullyAssignedInventory = {
+      ...inventory,
+      packedCartons: 10,
+      packedTotalQuantity: 1000,
+      totalAssigned: 1000,
+      availableQuantity: 0,
+    };
+    const allocationRepository: Pick<AllocationRepository, "snapshot"> = {
+      snapshot: async () => ({
+        events: [
+          {
+            allocationId: "ALLOC-2026-0001",
+            orderId: created.orderId,
+            orderLineId: created.items[0]!.orderLineId,
+            sku: sku.sku,
+            itemDescription: sku.itemDescription,
+            quantity: 1000,
+            notes: "Packed and assigned",
+          },
+        ],
+        nextRowNumber: 3,
+      }),
+    };
+    const {
+      packedTotalQuantity: _packedTotalQuantity,
+      availableQuantity: _availableQuantity,
+      ...fullyAssignedSource
+    } = fullyAssignedInventory;
+    let shipmentInventory = [{ ...fullyAssignedSource, rowNumber: 2 }];
+    const reconciledService = new OrderService(
+      repository,
+      skuRepository,
+      { list: async () => [fullyAssignedInventory] },
+      allocationRepository,
+      {
+        list: async () => shipmentInventory,
+        updateMany: async (records) => {
+          shipmentInventory = records;
+        },
+      },
+    );
+    const result = await reconciledService.get(created.orderId);
+
+    expect(result.items[0]).toMatchObject({
+      reservedQuantity: 1000,
+      remainingQuantity: 0,
+      shortfallQuantity: 0,
+      stockStatus: "FULLY_RESERVED",
+      suggestedAction: "NO_ACTION",
+    });
+
+    await reconciledService.adjustAllocation(
+      created.orderId,
+      created.items[0]!.orderLineId,
+      -1000,
+    );
+    expect(repository.lineStateWrites.at(-1)?.input).toMatchObject({
+      status: "PARTIALLY RESERVED",
+      reservedQuantity: 0,
+    });
+
+    const shipped = await reconciledService.ship(created.orderId);
+    expect(shipped).toMatchObject({
+      status: "COMPLETED",
+      completedAt: expect.any(String),
+    });
+    expect(repository.completionWrites[0]).toMatchObject({
+      title: created.sheetTitle,
+      lineCount: 1,
+    });
+    expect(shipmentInventory[0]).toMatchObject({
+      packedCartons: 0,
+      totalAssigned: 0,
+    });
+    await expect(
+      reconciledService.stockCheck(created.orderId),
+    ).rejects.toMatchObject({ code: "ORDER_COMPLETED", status: 409 });
+  });
+
+  it("rejects shipping while any order line remains unreserved", async () => {
+    const repository = new FakeOrderRepository();
+    const service = new OrderService(
+      repository,
+      skuRepository,
+      inventoryService,
+    );
+    const created = await service.create({
+      customerName: "ABC Traders",
+      dateReceived: "2026-08-04",
+      items: [{ sku: "KV-000001", cartons: 10 }],
+    });
+    repository.written[1]![16] = 1000;
+    repository.sheets = [
+      { sheetId: 99, title: created.sheetTitle, rows: repository.written },
+    ];
+
+    await expect(service.ship(created.orderId)).rejects.toMatchObject({
+      code: "ORDER_NOT_READY_TO_SHIP",
+      status: 409,
+    });
+    expect(repository.completionWrites).toHaveLength(0);
   });
 
   it("increments yearly order IDs", () => {

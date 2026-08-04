@@ -8,6 +8,7 @@ import {
 import { AppError } from "../../lib/app-error.js";
 import type { InventoryRepository } from "../inventory/inventory.repository.js";
 import type { OrderService } from "../orders/order.service.js";
+import type { SupplierRequestService } from "../supplier-requests/supplier-request.service.js";
 import type { ReceivingRepository } from "./receiving.repository.js";
 
 const RECEIPT_ID = /^REC-(\d{4})-(\d{4,})$/;
@@ -29,6 +30,10 @@ export class ReceivingService {
     private readonly repository: ReceivingRepository,
     private readonly inventoryRepository: InventoryRepository,
     private readonly orders: Pick<OrderService, "list" | "markLineReceived">,
+    private readonly supplierRequests?: Pick<
+      SupplierRequestService,
+      "markReceivedForLine"
+    >,
   ) {}
 
   async openOrderOptions(rawSku: string) {
@@ -144,6 +149,12 @@ export class ReceivingService {
         request.orderLineId,
         request.markSupplierRequestReceived,
       );
+      if (request.markSupplierRequestReceived)
+        await this.supplierRequests?.markReceivedForLine(
+          request.orderId,
+          request.orderLineId,
+          request.sendDeliveryConfirmation,
+        );
     }
     if (idempotencyKey) this.completed.set(idempotencyKey, receipt);
     return receipt;

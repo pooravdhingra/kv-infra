@@ -15,10 +15,18 @@ export const createReceiptRequestSchema = z
     orderId: z.string().trim().optional(),
     orderLineId: z.string().trim().optional(),
     markSupplierRequestReceived: z.boolean().default(false),
+    sendDeliveryConfirmation: z.boolean().default(false),
   })
   .refine((value) => Boolean(value.orderId) === Boolean(value.orderLineId), {
     message: "Order and order line must be linked together",
-  });
+  })
+  .refine(
+    (value) =>
+      !value.sendDeliveryConfirmation || value.markSupplierRequestReceived,
+    {
+      message: "Delivery confirmation requires marking the request received",
+    },
+  );
 
 export const receiptSchema = z.object({
   receiptId: z.string(),

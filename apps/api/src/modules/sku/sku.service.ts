@@ -3,6 +3,7 @@ import {
   skuSchema,
   updateSkuRequestSchema,
   type Sku,
+  type SkuOem,
 } from "@kv-infra/shared";
 
 import { AppError } from "../../lib/app-error.js";
@@ -10,11 +11,21 @@ import type { SkuRecord, SkuRepository } from "./sku.repository.js";
 
 const withoutRow = ({ rowNumber: _rowNumber, ...sku }: SkuRecord): Sku => sku;
 
-const GENERATED_SKU_PATTERN = /^(?:DELETED-)?KV-(\d{6,})$/;
+const OEM_PREFIX: Record<SkuOem, string> = {
+  Bajaj: "B",
+  TVS: "T",
+  Piaggio: "P",
+  Other: "X",
+};
 
-export const generateNextSkuCode = (skus: Array<Pick<Sku, "sku">>) => {
+export const generateNextSkuCode = (
+  skus: Array<Pick<Sku, "sku">>,
+  oem: SkuOem,
+) => {
+  const prefix = OEM_PREFIX[oem];
+  const pattern = new RegExp(`^(?:DELETED-)?KV-${prefix}(\\d{6,})$`);
   const highestSequence = skus.reduce((highest, item) => {
-    const match = GENERATED_SKU_PATTERN.exec(item.sku);
+    const match = pattern.exec(item.sku);
     if (!match) return highest;
     const sequence = Number(match[1]);
     return Number.isSafeInteger(sequence)
@@ -22,7 +33,7 @@ export const generateNextSkuCode = (skus: Array<Pick<Sku, "sku">>) => {
       : highest;
   }, 0);
 
-  return `KV-${String(highestSequence + 1).padStart(6, "0")}`;
+  return `KV-${prefix}${String(highestSequence + 1).padStart(6, "0")}`;
 };
 
 export class SkuService {
@@ -45,12 +56,12 @@ export class SkuService {
   }
 
   async create(input: unknown) {
-    const details = createSkuRequestSchema.parse(input);
+    const { oem, ...details } = createSkuRequestSchema.parse(input);
     const [skus, inventory] = await Promise.all([
       this.repository.listSkus(),
       this.repository.listInventory(),
     ]);
-    const sku = { sku: generateNextSkuCode(skus), ...details };
+    const sku = { sku: generateNextSkuCode(skus, oem), ...details };
 
     await this.repository.appendSku(sku);
     await this.repository.appendInventory(sku, inventory.length + 2);

@@ -29,6 +29,27 @@ export const calculateOrderLineTotals = (input: {
   ),
 });
 
+export const shipInventoryTransition = (input: {
+  quantityPerCarton: number;
+  packedCartons: number;
+  totalAssigned: number;
+  shippedQuantity: number;
+}) => {
+  if (input.shippedQuantity <= 0)
+    throw new RangeError("Shipped quantity must be positive");
+  const shippedCartons = input.shippedQuantity / input.quantityPerCarton;
+  if (!Number.isInteger(shippedCartons))
+    throw new RangeError("Shipped quantity must contain complete cartons");
+  if (shippedCartons > input.packedCartons)
+    throw new RangeError("Shipped cartons exceed packed stock");
+  if (input.shippedQuantity > input.totalAssigned)
+    throw new RangeError("Shipped quantity exceeds assigned stock");
+  return {
+    packedCartons: round(input.packedCartons - shippedCartons),
+    totalAssigned: round(input.totalAssigned - input.shippedQuantity),
+  };
+};
+
 export const calculateStockCheck = (input: {
   requiredQuantity: number;
   availableQuantity: number;
@@ -174,4 +195,15 @@ export const assignInventoryTransition = (input: {
   if (input.quantityAssigned > availableQuantity)
     throw new RangeError("Assigned quantity exceeds available stock");
   return round(input.totalAssigned + input.quantityAssigned);
+};
+
+export const cancelInventoryAssignmentTransition = (input: {
+  totalAssigned: number;
+  quantityCancelled: number;
+}) => {
+  if (input.quantityCancelled <= 0)
+    throw new RangeError("Cancelled quantity must be positive");
+  if (input.quantityCancelled > input.totalAssigned)
+    throw new RangeError("Cancelled quantity exceeds total assigned stock");
+  return round(input.totalAssigned - input.quantityCancelled);
 };

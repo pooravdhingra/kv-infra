@@ -4,7 +4,7 @@ A lightweight operator dashboard over the company's existing Google Sheets and W
 
 ## Current status
 
-Phases 0–8 are implemented: product contracts, Google OAuth/Sheets connection, SKU master, inventory, orders with suggested actions, receiving, and append-only packing/QA with optional linked-order assignment.
+Phases 0–12 are implemented: product contracts, Google OAuth/Sheets connection, SKU master, inventory, orders, receiving, packing/QA, direct allocation and cancellation, supplier requests, persisted Baileys WhatsApp connection, guarded three-day follow-ups, and the prioritized operator dashboard.
 
 ## Requirements
 
@@ -45,6 +45,4 @@ Read `AGENTS.md` before changing code and the relevant root contract before impl
 
 For Google Cloud, secrets, spreadsheet preparation, and end-to-end testing, follow [`ENVIRONMENT_SETUP.md`](./ENVIRONMENT_SETUP.md).
 
-## Next milestone
-
-Phase 9 adds direct stock reservation and allocation cancellation from order detail. Supplier requests and WhatsApp follow in Phases 10–11.
+WhatsApp credentials are stored only in the ignored local directory configured by `BAILEYS_AUTH_DIR`. Connect the operator account from Settings before sending supplier requests.

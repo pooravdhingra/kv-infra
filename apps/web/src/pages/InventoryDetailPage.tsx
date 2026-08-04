@@ -87,7 +87,6 @@ export const InventoryDetailPage = ({ sku }: { sku: string }) => {
       </a>
       <div className="page-title-row detail-title">
         <div>
-          <span className="eyebrow">{item.sku}</span>
           <h1>{item.itemDescription}</h1>
         </div>
         <span>

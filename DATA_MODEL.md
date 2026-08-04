@@ -2,7 +2,7 @@
 
 ## Identifiers
 
-- SKU: `KV-NNNNNN`, allocated sequentially by the API. Six digits are the minimum; the sequence expands beyond six digits without wrapping.
+- SKU: `KV-BNNNNNN`, `KV-TNNNNNN`, `KV-PNNNNNN`, or `KV-XNNNNNN`, allocated independently by OEM. Six digits are the minimum and each sequence expands without wrapping. Existing legacy identifiers remain valid and unchanged.
 - Order: `ORD-YYYY-NNNN`
 - Order line: `ORD-YYYY-NNNN-LNNN`
 - Receipt, packing, allocation, supplier request, and message records each receive immutable unique IDs.

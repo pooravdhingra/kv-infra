@@ -6,9 +6,10 @@
 - API health route returns status and version.
 - Web and API TypeScript compile independently.
 - Production builds complete from the repository root.
+- Dashboard recommendations prioritize failed sends, due follow-ups, active packing, and actionable order states from live workflow data.
 - Exact Sheets headers pass and mismatched headers fail before writes.
-- SKU creation assigns the next `KV-NNNNNN` identifier and adds both master and inventory records.
-- Legacy SKU names do not affect the generated sequence.
+- SKU creation requires an OEM, assigns the next independent `KV-BNNNNNN`, `KV-TNNNNNN`, `KV-PNNNNNN`, or `KV-XNNNNNN` identifier, and adds both master and inventory records.
+- Legacy and other-OEM SKU names do not affect the selected OEM sequence.
 - Generated identifiers continue safely beyond six digits.
 - SKU deletion archives matching master/inventory identities, hides the SKU from active results, and does not allow its generated identifier to be reused.
 - Inventory totals are derived from carton size, packed cartons, and assigned quantity; unpacked stock is excluded from available.
@@ -21,8 +22,21 @@
 - Packing finish requires exact QA reconciliation and complete cartons, then appends a separate finished event.
 - Linked packing assigns only good stock to the exact order line and appends an allocation.
 - Receiving order lookup batch-reads order tabs and fires only after a complete SKU selection.
+- Multi-tab reads associate returned values by sheet name, including when an earlier tab is empty and omitted from Google's response.
 - Supplier Master is read through a one-minute cache and suppliers are priority sorted.
 - A receipt write reuses one Receiving Log snapshot and commits Inventory plus log row in one values batch update.
+- Direct allocations enforce available packed stock and exact remaining demand.
+- Fully reserved order lines derive reserved quantity from the allocation ledger, show zero shortfall, and do not request supplier action even if the order tab cell is stale.
+- Shipping rejects partially reserved orders, consumes the exact packed cartons and assigned quantity, completes fully reserved orders idempotently, and prevents later stock/allocation mutations.
+- Completed orders leave Pending Orders and remain browsable in the Completed Orders tab.
+- Allocation cancellation restores assigned stock through a compensating append-only event.
+- Supplier request and follow-up message builders preserve the approved wording and case.
+- Group supplier review requires every draft to be approved, keeps every message editable, combines same-number items into one send, preserves one request row per line, and spaces distinct messages by 5–55 seconds.
+- Displayed CBM values round to no more than ten decimal places.
+- Failed WhatsApp attempts remain audit-logged and retryable.
+- Ten-digit supplier numbers receive the configured default country code, and nonexistent WhatsApp recipients fail before the attempt is recorded as sent.
+- Optional delivery confirmation is allowed only for an explicitly received linked request and cannot block the receipt.
+- Follow-up scheduling uses three-day timestamps and prevents a second send on the same operator-local day.
 
 ## Business-rule tests required before integration
 
@@ -48,6 +62,8 @@
 8. Preview a new order and verify quantity, gross weight, and CBM update as carton count changes.
 9. In a non-production orders workbook, create an order and confirm the tab name, frozen header, hidden system columns, formulas, and initial stock status.
 10. In a non-production master workbook, receive stock, start packing, finish QA, and verify Inventory plus all append-only log rows after each step.
+11. Reserve and cancel fake stock from an order, verifying positive and compensating negative allocation rows.
+12. Link a non-production WhatsApp account, send only to a controlled test number, and verify initial/follow-up log rows and three-day scheduling.
 
 ## Integration test fixtures
 
