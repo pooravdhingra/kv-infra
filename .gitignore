@@ -11,6 +11,6 @@ coverage/
 .baileys-auth/
 apps/api/.baileys-auth/
 google-token.json
+.secrets/
 *.pem
 *.key
-

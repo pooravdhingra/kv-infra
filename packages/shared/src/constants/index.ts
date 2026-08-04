@@ -10,3 +10,110 @@ export const SUPPLIER_REQUEST_STATUSES = [
 
 export const DIMENSION_UNIT = "cm" as const;
 export const VOLUME_UNIT = "m3" as const;
+
+export const PACKING_MASTER_HEADERS = [
+  "SKU",
+  "ITEM DESCRIPTION",
+  "QUANTITY/CTN",
+  "UNIT",
+  "WEIGHT/CTN",
+  "LENGTH",
+  "BREADTH",
+  "HEIGHT",
+] as const;
+
+export const SUPPLIER_MASTER_HEADERS = [
+  "SKU",
+  "ITEM DESCRIPTION",
+  "NAME",
+  "NUMBER",
+  "PRIORITY SCALE",
+] as const;
+
+export const INVENTORY_HEADERS = [
+  "SKU",
+  "ITEM DESCRIPTION",
+  "QTY / CARTON",
+  "UNIT",
+  "UNPACKED QTY",
+  "IN PACKING QTY",
+  "PACKED CTNS",
+  "PACKED TOTAL QTY",
+  "TOTAL ASSIGNED",
+  "AVAILABLE QTY",
+  "DEFECTIVE / SHORT QTY",
+  "LAST RECEIVED DATE",
+  "LAST PACKED DATE",
+  "WAREHOUSE LOCATION",
+  "NOTES",
+  "LAST UPDATED",
+] as const;
+
+export const ORDER_HEADERS = [
+  "SKU",
+  "ITEM DESCRIPTION",
+  "QUANTITY/CTN",
+  "UNIT",
+  "NO OF CTNS",
+  "T-QTY",
+  "WEIGHT/CTN",
+  "GROSS WT",
+  "VOLUME",
+  "STATUS",
+  "LENGTH",
+  "BREADTH",
+  "HEIGHT",
+  "ORDER ID",
+  "ORDER LINE ID",
+  "ORDER DATE",
+  "REQUIRED QTY",
+  "RESERVED QTY",
+  "SHORTFALL QTY",
+  "SUPPLIER REQUEST STATUS",
+  "LAST UPDATED",
+  "ORDER NOTES",
+  "CUSTOMER NAME",
+] as const;
+
+export const RECEIVING_LOG_HEADERS = [
+  "RECEIPT ID",
+  "DATE",
+  "SKU",
+  "ITEM DESCRIPTION",
+  "QTY RECEIVED",
+  "UNIT",
+  "SUPPLIER",
+  "WAREHOUSE LOCATION",
+  "RECEIVED BY",
+  "NOTES",
+  "ITEM CHECK STATUS",
+  "ORDER ID",
+  "ORDER LINE ID",
+] as const;
+
+export const QA_LOG_HEADERS = [
+  "PACKING ID",
+  "DATE",
+  "SKU",
+  "ITEM DESCRIPTION",
+  "QTY TAKEN FOR PACKING",
+  "GOOD QTY",
+  "PACKED CTNS",
+  "DEFECTIVE QTY",
+  "SHORT QTY",
+  "ASSIGNED TO ORDER?",
+  "ORDER ID",
+  "ORDER LINE ID",
+  "STATUS",
+  "NOTES",
+] as const;
+
+export const ORDER_ALLOCATION_HEADERS = [
+  "ALLOCATION ID",
+  "ORDER ID",
+  "ORDER LINE ID",
+  "SKU",
+  "ITEM DESCRIPTION",
+  "QTY ASSIGNED",
+  "NOTES",
+] as const;

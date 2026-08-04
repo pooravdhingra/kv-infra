@@ -1,14 +1,42 @@
 import { API_PREFIX, type ApiError } from "@kv-infra/shared";
 import cors from "cors";
-import express from "express";
+import express, {
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
+import { ZodError } from "zod";
 
 import { env } from "./config/env.js";
+import { AppError } from "./lib/app-error.js";
+import { createGoogleRouter } from "./modules/google/google.routes.js";
+import { GoogleOAuthService } from "./modules/google/google-oauth.service.js";
+import { EncryptedFileTokenStore } from "./modules/google/google-token-store.js";
+import { GoogleSheetsClient } from "./modules/sheets/google-sheets.client.js";
+import { createInventoryRouter } from "./modules/inventory/inventory.routes.js";
+import { GoogleSheetsInventoryRepository } from "./modules/inventory/inventory.repository.js";
+import { InventoryService } from "./modules/inventory/inventory.service.js";
+import { createPackingRouter } from "./modules/packing/packing.routes.js";
+import { GoogleSheetsPackingRepository } from "./modules/packing/packing.repository.js";
+import { PackingService } from "./modules/packing/packing.service.js";
+import { createReceivingRouter } from "./modules/receiving/receiving.routes.js";
+import { GoogleSheetsReceivingRepository } from "./modules/receiving/receiving.repository.js";
+import { ReceivingService } from "./modules/receiving/receiving.service.js";
+import { createOrderRouter } from "./modules/orders/order.routes.js";
+import { GoogleSheetsOrderRepository } from "./modules/orders/order.repository.js";
+import { OrderService } from "./modules/orders/order.service.js";
+import { createSkuRouter } from "./modules/sku/sku.routes.js";
+import { GoogleSheetsSkuRepository } from "./modules/sku/sku.repository.js";
+import { SkuService } from "./modules/sku/sku.service.js";
+import { createSupplierRouter } from "./modules/suppliers/supplier.routes.js";
+import { GoogleSheetsSupplierRepository } from "./modules/suppliers/supplier.repository.js";
+import { SupplierService } from "./modules/suppliers/supplier.service.js";
 
 export const createHealthResponse = () => ({
   data: {
     status: "ok" as const,
     service: "api" as const,
-    version: "0.1.0",
+    version: "0.8.1",
     timestamp: new Date().toISOString(),
   },
 });
@@ -24,12 +52,86 @@ export const createApp = () => {
     response.json(createHealthResponse());
   });
 
+  const tokenStore = new EncryptedFileTokenStore();
+  const oauth = new GoogleOAuthService(tokenStore);
+  const sheets = new GoogleSheetsClient(oauth);
+  const skuRepository = new GoogleSheetsSkuRepository(sheets);
+  const skuService = new SkuService(skuRepository);
+  const inventoryRepository = new GoogleSheetsInventoryRepository(sheets);
+  const inventoryService = new InventoryService(inventoryRepository);
+  const orderService = new OrderService(
+    new GoogleSheetsOrderRepository(sheets),
+    skuRepository,
+    inventoryService,
+  );
+  const receivingService = new ReceivingService(
+    new GoogleSheetsReceivingRepository(sheets),
+    inventoryRepository,
+    orderService,
+  );
+  const packingService = new PackingService(
+    new GoogleSheetsPackingRepository(sheets),
+    inventoryRepository,
+    orderService,
+  );
+  const supplierService = new SupplierService(
+    new GoogleSheetsSupplierRepository(sheets),
+  );
+
+  app.use(`${API_PREFIX}/google`, createGoogleRouter(oauth, sheets));
+  app.use(`${API_PREFIX}/skus`, createSkuRouter(skuService));
+  app.use(`${API_PREFIX}/inventory`, createInventoryRouter(inventoryService));
+  app.use(`${API_PREFIX}/orders`, createOrderRouter(orderService));
+  app.use(`${API_PREFIX}/receiving`, createReceivingRouter(receivingService));
+  app.use(`${API_PREFIX}/packing`, createPackingRouter(packingService));
+  app.use(`${API_PREFIX}/suppliers`, createSupplierRouter(supplierService));
+
   app.use((_request, response) => {
     const body: ApiError = {
       error: { code: "NOT_FOUND", message: "Route not found" },
     };
     response.status(404).json(body);
   });
+
+  app.use(
+    (
+      error: unknown,
+      _request: Request,
+      response: Response,
+      _next: NextFunction,
+    ) => {
+      if (error instanceof ZodError) {
+        const body: ApiError = {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Request validation failed",
+            details: error.flatten(),
+          },
+        };
+        response.status(400).json(body);
+        return;
+      }
+      if (error instanceof AppError) {
+        const body: ApiError = {
+          error: {
+            code: error.code,
+            message: error.message,
+            ...(error.details === undefined ? {} : { details: error.details }),
+          },
+        };
+        response.status(error.status).json(body);
+        return;
+      }
+
+      const body: ApiError = {
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "An unexpected error occurred",
+        },
+      };
+      response.status(500).json(body);
+    },
+  );
 
   return app;
 };

@@ -2,6 +2,7 @@
 
 ## Identifiers
 
+- SKU: `KV-NNNNNN`, allocated sequentially by the API. Six digits are the minimum; the sequence expands beyond six digits without wrapping.
 - Order: `ORD-YYYY-NNNN`
 - Order line: `ORD-YYYY-NNNN-LNNN`
 - Receipt, packing, allocation, supplier request, and message records each receive immutable unique IDs.
@@ -23,6 +24,8 @@ IDs, not sheet row numbers, are cross-sheet references. A repeated SKU in one or
 ## Stored statuses
 
 Supplier request status is one of `SENT`, `CONFIRMED`, or `RECEIVED`. `FOLLOW_UP_DUE` is calculated, never stored.
+
+QA event status is `IN PACKING` or `FINISHED`. Both states are append events under one packing ID; business log rows are never rewritten.
 
 ## Derived values
 

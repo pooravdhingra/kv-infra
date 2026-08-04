@@ -1,6 +1,6 @@
 {
   "name": "@kv-infra/web",
-  "version": "0.1.0",
+  "version": "0.8.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@kv-infra/shared": "0.1.0",
+    "@kv-infra/shared": "0.8.1",
     "axios": "^1.10.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

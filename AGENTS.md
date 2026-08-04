@@ -23,7 +23,7 @@ Do not build a client portal, analytics, shipping documents, sticker printing, p
 - Starting packing moves quantity from unpacked to in-packing.
 - Finishing packing moves quantity from in-packing to packed and records defects/shortages.
 - Assigning stock increases total assigned; cancellation reverses it.
-- Logs are append-only. Never delete business rows; use statuses or notes.
+- Logs are append-only. Never delete business rows; use statuses or notes. The SKU delete action is the sole exception: it archives the Packing Master and Inventory identities with a `DELETED-` prefix so history is preserved.
 - Receiving stops a supplier follow-up only when explicitly linked to its request/order.
 - Do not send a duplicate automated follow-up on the same day.
 

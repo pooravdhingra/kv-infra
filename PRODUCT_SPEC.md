@@ -10,7 +10,7 @@ One authenticated operator role. Role management and customer access are not par
 
 ## MVP capabilities
 
-1. Create and edit a SKU.
+1. Create, edit, and archive a SKU.
 2. Create an order and a human-readable order sheet tab.
 3. Calculate total quantity, gross weight, and volume.
 4. Check packed and unpacked stock and suggest the next valid action.
@@ -48,3 +48,5 @@ Client portal, predictive analytics, shipping documents, sticker printing, neste
 Carton dimensions are stored in centimetres. Volume is cubic metres:
 
 `LENGTH × BREADTH × HEIGHT × NO OF CTNS / 1,000,000`.
+
+Carton weight is stored and displayed in kilograms. New SKU identifiers are assigned automatically using the sequential `KV-NNNNNN` convention.

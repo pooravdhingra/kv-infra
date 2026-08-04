@@ -1,35 +1,68 @@
-import type { PropsWithChildren } from "react";
+import { useEffect, useState, type PropsWithChildren } from "react";
+
+import { getGoogleStatus } from "../api/client";
 
 const links = [
   ["/", "Home"],
-  ["/orders/new", "New order"],
+  ["/skus", "SKU master"],
+  ["/orders", "Orders"],
   ["/receiving", "Receive"],
   ["/packing", "Packing"],
   ["/inventory", "Inventory"],
+  ["/settings", "Settings"],
 ] as const;
 
-export const AppShell = ({ children }: PropsWithChildren) => (
-  <div className="app-shell">
-    <header className="topbar">
-      <div>
-        <span className="eyebrow">KV Infra</span>
-        <strong>Operator OS</strong>
-      </div>
-      <span className="connection">
-        <i /> API connected
-      </span>
-    </header>
-    <nav className="nav" aria-label="Main navigation">
-      {links.map(([to, label]) => (
-        <a
-          key={to}
-          href={to}
-          className={window.location.pathname === to ? "active" : ""}
-        >
-          {label}
+export const AppShell = ({ children }: PropsWithChildren) => {
+  const [connected, setConnected] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    void getGoogleStatus()
+      .then((status) => setConnected(status.connected))
+      .catch(() => setConnected(false));
+  }, []);
+
+  return (
+    <div className="app-shell">
+      <header className="topbar">
+        <a className="brand" href="/" aria-label="KV Operations OS home">
+          <img src="/kv-logo.png" alt="" width="40" height="40" />
+          <span className="brand-copy">
+            <span className="eyebrow">KV Infra</span>
+            <strong>Operations OS</strong>
+          </span>
         </a>
-      ))}
-    </nav>
-    <main>{children}</main>
-  </div>
-);
+        <a
+          className={`connection ${connected ? "is-connected" : ""}`}
+          href="/settings"
+        >
+          <i />{" "}
+          {connected === null
+            ? "Checking Google…"
+            : connected
+              ? "Sheets connected"
+              : "Sheets offline"}
+        </a>
+      </header>
+      <nav className="nav" aria-label="Main navigation">
+        {links.map(([to, label]) => (
+          <a
+            key={to}
+            href={to}
+            className={
+              to === "/orders" || to === "/packing"
+                ? window.location.pathname.startsWith(to)
+                  ? "active"
+                  : ""
+                : window.location.pathname === to
+                  ? "active"
+                  : ""
+            }
+          >
+            {label}
+          </a>
+        ))}
+      </nav>
+      <main>{children}</main>
+    </div>
+  );
+};

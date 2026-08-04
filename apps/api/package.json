@@ -1,6 +1,6 @@
 {
   "name": "@kv-infra/api",
-  "version": "0.1.0",
+  "version": "0.8.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@kv-infra/shared": "0.1.0",
+    "@kv-infra/shared": "0.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
