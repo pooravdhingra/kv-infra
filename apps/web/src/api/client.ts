@@ -320,6 +320,10 @@ export const getWhatsAppStatus = async () =>
 export const connectWhatsApp = async () =>
   whatsappStatusSchema.parse((await api.post("/whatsapp/connect")).data).data;
 
+export const disconnectWhatsApp = async () =>
+  whatsappStatusSchema.parse((await api.post("/whatsapp/disconnect")).data)
+    .data;
+
 export const getWhatsAppQr = async () =>
   whatsappQrSchema.parse((await api.get("/whatsapp/qr")).data).data.qr;
 

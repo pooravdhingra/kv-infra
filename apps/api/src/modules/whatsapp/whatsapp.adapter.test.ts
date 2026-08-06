@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   BaileysWhatsAppAdapter,
   ignoreIncomingWhatsAppJid,
+  isSafeWhatsAppAuthDirectory,
   normalizeWhatsAppJid,
 } from "./whatsapp.adapter.js";
 
@@ -39,6 +40,34 @@ describe("normalizeWhatsAppJid", () => {
   it("ignores inbound chats because the integration is outbound-only", () => {
     expect(ignoreIncomingWhatsAppJid("919810525118@s.whatsapp.net")).toBe(true);
     expect(ignoreIncomingWhatsAppJid("120363000000000000@g.us")).toBe(true);
+  });
+
+  it("only permits dedicated WhatsApp credential directories to be reset", () => {
+    expect(isSafeWhatsAppAuthDirectory("/data/baileys-auth")).toBe(true);
+    expect(isSafeWhatsAppAuthDirectory("/tmp/kv-whatsapp-auth-test")).toBe(
+      true,
+    );
+    expect(isSafeWhatsAppAuthDirectory("/")).toBe(false);
+    expect(isSafeWhatsAppAuthDirectory("/data")).toBe(false);
+  });
+
+  it("removes saved credentials when disconnected", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "kv-whatsapp-auth-"));
+    temporaryDirectories.push(directory);
+    await writeFile(join(directory, "creds.json"), "{}");
+    await writeFile(join(directory, "session-test.json"), "{}");
+    const adapter = new BaileysWhatsAppAdapter(directory);
+
+    expect(adapter.hasSavedSession()).toBe(true);
+    await adapter.disconnect();
+
+    expect(adapter.hasSavedSession()).toBe(false);
+    expect(adapter.status()).toMatchObject({
+      status: "DISCONNECTED",
+      connected: false,
+      accountId: null,
+      lastError: null,
+    });
   });
 
   it("returns an actionable error for an invalid credential directory", async () => {

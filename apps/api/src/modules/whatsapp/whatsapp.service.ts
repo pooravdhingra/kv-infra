@@ -43,6 +43,11 @@ export class WhatsAppService {
     return this.status();
   }
 
+  async disconnect() {
+    await this.adapter.disconnect();
+    return this.status();
+  }
+
   async send(input: unknown, context: MessageContext = {}) {
     const request = sendWhatsAppMessageSchema.parse(input);
     const messageId = nextMessageId(await this.repository.listIds());

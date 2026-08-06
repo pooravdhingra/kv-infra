@@ -6,6 +6,7 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import path from "node:path";
 import { existsSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import pino from "pino";
 
 import { env, projectRoot } from "../../config/env.js";
@@ -16,6 +17,7 @@ export type WhatsAppConnectionStatus =
 
 export interface WhatsAppAdapter {
   connect(): Promise<void>;
+  disconnect(): Promise<void>;
   status(): {
     status: WhatsAppConnectionStatus;
     connected: boolean;
@@ -60,6 +62,31 @@ const whatsappAuthStorageError = (error: unknown) => {
       resolution:
         "Use a writable BAILEYS_AUTH_DIR such as .secrets/baileys-auth locally or /data/baileys-auth on Railway",
     },
+  );
+};
+
+const whatsappAuthResetError = (error: unknown) => {
+  const code = (error as NodeJS.ErrnoException).code;
+  return new AppError(
+    503,
+    "WHATSAPP_AUTH_RESET_FAILED",
+    "Could not remove the saved WhatsApp linked-device credentials",
+    {
+      ...(code ? { fileSystemCode: code } : {}),
+      resolution:
+        "Confirm BAILEYS_AUTH_DIR points to a writable dedicated directory such as .secrets/baileys-auth locally or /data/baileys-auth on Railway",
+    },
+  );
+};
+
+export const isSafeWhatsAppAuthDirectory = (directory: string) => {
+  const resolved = path.resolve(directory);
+  const name = path.basename(resolved).toLowerCase();
+  return (
+    resolved !== path.parse(resolved).root &&
+    /(?:baileys|whatsapp).*(?:auth|session)|(?:auth|session).*(?:baileys|whatsapp)/.test(
+      name,
+    )
   );
 };
 
@@ -117,6 +144,44 @@ export class BaileysWhatsAppAdapter implements WhatsAppAdapter {
     await this.connecting;
   }
 
+  async disconnect() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    const socket = this.socket;
+    this.socket = null;
+    this.currentQr = null;
+    this.accountId = null;
+    this.connectionStatus = "DISCONNECTED";
+    this.lastError = null;
+
+    if (socket) {
+      try {
+        await socket.logout("Disconnected from KV Operations OS");
+      } catch {
+        socket.end(undefined);
+      }
+    }
+
+    const directory = this.authDirectory();
+    if (!isSafeWhatsAppAuthDirectory(directory)) {
+      const resetError = whatsappAuthResetError(
+        new Error("Unsafe WhatsApp credential directory"),
+      );
+      this.lastError = resetError.message;
+      throw resetError;
+    }
+    try {
+      await rm(directory, { recursive: true, force: true });
+    } catch (error) {
+      const resetError = whatsappAuthResetError(error);
+      this.lastError = resetError.message;
+      throw resetError;
+    }
+  }
+
   private async createSocket() {
     this.connectionStatus = "CONNECTING";
     this.lastError = null;
@@ -146,6 +211,7 @@ export class BaileysWhatsAppAdapter implements WhatsAppAdapter {
       });
     });
     socket.ev.on("connection.update", (update) => {
+      if (this.socket !== socket) return;
       if (update.qr) {
         this.currentQr = update.qr;
         this.connectionStatus = "QR READY";

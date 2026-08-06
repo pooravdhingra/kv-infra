@@ -10,6 +10,9 @@ export const createWhatsAppRouter = (service: WhatsAppService) => {
   router.post("/connect", async (_request, response) => {
     response.json({ data: await service.connect() });
   });
+  router.post("/disconnect", async (_request, response) => {
+    response.json({ data: await service.disconnect() });
+  });
   router.get("/qr", async (_request, response) => {
     response.json({ data: { qr: await service.qr() } });
   });

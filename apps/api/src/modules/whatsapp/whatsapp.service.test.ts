@@ -17,22 +17,48 @@ class FakeLogRepository implements WhatsAppLogRepository {
   }
 }
 
-const adapter = (failure?: string): WhatsAppAdapter => ({
-  connect: async () => undefined,
-  status: () => ({
-    status: "CONNECTED",
-    connected: true,
-    qrAvailable: false,
-    accountId: "test",
-    lastError: null,
-  }),
-  qr: () => null,
-  sendText: async () => {
-    if (failure) throw new Error(failure);
-  },
-});
+const adapter = (
+  failure?: string,
+  onDisconnect?: () => void,
+): WhatsAppAdapter => {
+  let connected = true;
+  return {
+    connect: async () => undefined,
+    disconnect: async () => {
+      connected = false;
+      onDisconnect?.();
+    },
+    status: () => ({
+      status: connected ? "CONNECTED" : "DISCONNECTED",
+      connected,
+      qrAvailable: false,
+      accountId: connected ? "test" : null,
+      lastError: null,
+    }),
+    qr: () => null,
+    sendText: async () => {
+      if (failure) throw new Error(failure);
+    },
+  };
+};
 
 describe("WhatsAppService", () => {
+  it("disconnects the adapter and returns its latest status", async () => {
+    let disconnected = false;
+    const service = new WhatsAppService(
+      adapter(undefined, () => {
+        disconnected = true;
+      }),
+      new FakeLogRepository(),
+    );
+
+    await expect(service.disconnect()).resolves.toMatchObject({
+      status: "DISCONNECTED",
+      connected: false,
+    });
+    expect(disconnected).toBe(true);
+  });
+
   it("append-logs successful and failed message attempts", async () => {
     const successfulLog = new FakeLogRepository();
     const successful = await new WhatsAppService(adapter(), successfulLog).send(

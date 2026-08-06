@@ -52,6 +52,7 @@ All endpoints use JSON under `/api`. Successful responses use `{ "data": ... }`;
 | POST   | `/api/supplier-requests/:id/retry`             | Retry a failed initial send                          |
 | GET    | `/api/whatsapp/status`                         | Read Baileys connection state                        |
 | POST   | `/api/whatsapp/connect`                        | Start or restore the WhatsApp connection             |
+| POST   | `/api/whatsapp/disconnect`                     | Log out and remove the saved linked-device session   |
 | GET    | `/api/whatsapp/qr`                             | Return the current pairing QR payload                |
 | POST   | `/api/whatsapp/send`                           | Send and append-log a direct text message            |
 
@@ -59,7 +60,7 @@ Except for health and the three auth endpoints, every API route requires a valid
 
 Google OAuth callback persistence failures return `GOOGLE_TOKEN_STORAGE_FAILED` with a safe filesystem code and configuration guidance. Local development uses `.secrets/google-oauth.json`; Railway uses `/data/google-oauth.json` on the attached persistent volume.
 
-WhatsApp connection setup failures caused by an invalid credential path return `WHATSAPP_AUTH_STORAGE_FAILED` with safe configuration guidance. Local development uses `.secrets/baileys-auth`; Railway uses `/data/baileys-auth` on the attached persistent volume.
+WhatsApp connection setup failures caused by an invalid credential path return `WHATSAPP_AUTH_STORAGE_FAILED` with safe configuration guidance. Disconnecting logs out the linked device and deletes only a validated, dedicated Baileys credential directory; reset failures return `WHATSAPP_AUTH_RESET_FAILED`. Local development uses `.secrets/baileys-auth`; Railway uses `/data/baileys-auth` on the attached persistent volume.
 
 ### SKU request
 

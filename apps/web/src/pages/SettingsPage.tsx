@@ -13,6 +13,7 @@ import {
   getGoogleStatus,
   testGoogleConnection,
   connectWhatsApp,
+  disconnectWhatsApp,
   getWhatsAppQr,
   getWhatsAppStatus,
 } from "../api/client";
@@ -32,6 +33,7 @@ export const SettingsPage = () => {
     null,
   );
   const [whatsappConnecting, setWhatsAppConnecting] = useState(false);
+  const [whatsappDisconnecting, setWhatsAppDisconnecting] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
   const [qrImage, setQrImage] = useState("");
   const [whatsappMessage, setWhatsAppMessage] = useState("");
@@ -60,6 +62,7 @@ export const SettingsPage = () => {
           setQr(null);
           setWhatsAppConnecting(false);
           setWhatsAppMessage("WhatsApp connected.");
+          window.dispatchEvent(new Event("kv-whatsapp-status-changed"));
           return;
         }
         setQr(await getWhatsAppQr());
@@ -127,6 +130,32 @@ export const SettingsPage = () => {
     } catch (error) {
       setWhatsAppConnecting(false);
       setWhatsAppMessage(apiErrorMessage(error));
+    }
+  };
+
+  const disconnectWa = async () => {
+    if (
+      !window.confirm(
+        "Disconnect this WhatsApp account? A new QR scan will be required before messages can be sent.",
+      )
+    )
+      return;
+
+    setWhatsAppDisconnecting(true);
+    setWhatsAppConnecting(false);
+    setWhatsAppMessage("");
+    setQr(null);
+    try {
+      setWhatsAppStatus(await disconnectWhatsApp());
+      setWhatsAppMessage(
+        "WhatsApp disconnected. Connect again to link a different sender account.",
+      );
+      window.dispatchEvent(new Event("kv-whatsapp-status-changed"));
+    } catch (error) {
+      setWhatsAppMessage(apiErrorMessage(error));
+      setWhatsAppStatus(await getWhatsAppStatus().catch(() => null));
+    } finally {
+      setWhatsAppDisconnecting(false);
     }
   };
 
@@ -241,15 +270,28 @@ export const SettingsPage = () => {
           <div className="notice error-notice">{whatsappStatus.lastError}</div>
         )}
         {whatsappMessage && <div className="notice">{whatsappMessage}</div>}
-        {!whatsappStatus?.connected && (
-          <button
-            className="primary-button"
-            disabled={whatsappConnecting}
-            onClick={() => void connectWa()}
-          >
-            {whatsappConnecting ? "Waiting for scan…" : "Connect WhatsApp"}
-          </button>
-        )}
+        <div className="button-row">
+          {!whatsappStatus?.connected && (
+            <button
+              className="primary-button"
+              aria-busy={whatsappConnecting}
+              disabled={whatsappConnecting || whatsappDisconnecting}
+              onClick={() => void connectWa()}
+            >
+              {whatsappConnecting ? "Waiting for scan…" : "Connect WhatsApp"}
+            </button>
+          )}
+          {whatsappStatus?.connected && (
+            <button
+              className="danger-button"
+              aria-busy={whatsappDisconnecting}
+              disabled={whatsappDisconnecting}
+              onClick={() => void disconnectWa()}
+            >
+              Disconnect WhatsApp
+            </button>
+          )}
+        </div>
         {qrImage && (
           <div className="whatsapp-qr">
             <img src={qrImage} alt="WhatsApp connection QR code" />

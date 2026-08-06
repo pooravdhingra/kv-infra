@@ -46,6 +46,7 @@
 - Displayed CBM values round to no more than ten decimal places.
 - Failed WhatsApp attempts remain audit-logged and retryable.
 - Ten-digit supplier numbers receive the configured default country code, and nonexistent WhatsApp recipients fail before the attempt is recorded as sent.
+- WhatsApp disconnect clears the saved linked-device credentials, suppresses reconnect, and permits a different account to be paired.
 - Optional delivery confirmation is allowed only for an explicitly received linked request and cannot block the receipt.
 - Follow-up scheduling uses three-day timestamps and prevents a second send on the same operator-local day.
 

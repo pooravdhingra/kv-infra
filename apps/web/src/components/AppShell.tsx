@@ -37,8 +37,12 @@ export const AppShell = ({
         .then((status) => setWhatsappConnected(status.connected))
         .catch(() => setWhatsappConnected(false));
     refreshWhatsApp();
+    window.addEventListener("kv-whatsapp-status-changed", refreshWhatsApp);
     const timer = window.setInterval(refreshWhatsApp, 30_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("kv-whatsapp-status-changed", refreshWhatsApp);
+    };
   }, []);
 
   return (
