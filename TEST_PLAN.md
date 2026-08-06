@@ -7,6 +7,7 @@
 - Web and API TypeScript compile independently.
 - Production builds complete from the repository root.
 - Dashboard recommendations prioritize failed sends, due follow-ups, active packing, and actionable order states from live workflow data.
+- Dashboard recommendations include incomplete SKUs whose carton quantity, weight, or dimensions contain zero values.
 - Exact Sheets headers pass and mismatched headers fail before writes.
 - SKU creation requires an OEM, assigns the next independent `KV-BNNNNNN`, `KV-TNNNNNN`, `KV-PNNNNNN`, or `KV-XNNNNNN` identifier, and adds both master and inventory records.
 - SKU creation accepts OEM and item description alone, defaulting packing quantity, weight, and dimensions to zero and unit to `pcs`.
@@ -21,6 +22,7 @@
 - Receiving increases only unpacked stock and general receipts never alter order/request state.
 - Packing start conserves quantity across unpacked and in-packing buckets and rejects overdraw.
 - Packing finish requires exact QA reconciliation and complete cartons, then appends a separate finished event.
+- Zero-valued SKU packing fields are treated as Missing, and the shared completeness check identifies every missing field.
 - Linked packing assigns only good stock to the exact order line and appends an allocation.
 - Receiving order lookup batch-reads order tabs and fires only after a complete SKU selection.
 - Multi-tab reads associate returned values by sheet name, including when an earlier tab is empty and omitted from Google's response.

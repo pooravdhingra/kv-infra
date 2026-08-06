@@ -91,6 +91,11 @@ export const listSkus = () => {
 export const createSku = async (input: CreateSkuRequest) =>
   skuResponseSchema.parse((await api.post("/skus", input)).data).data;
 
+export const getSku = async (sku: string) =>
+  skuResponseSchema.parse(
+    (await api.get(`/skus/${encodeURIComponent(sku)}`)).data,
+  ).data;
+
 export const updateSku = async (sku: string, input: UpdateSkuRequest) =>
   skuResponseSchema.parse(
     (await api.put(`/skus/${encodeURIComponent(sku)}`, input)).data,

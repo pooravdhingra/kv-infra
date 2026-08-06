@@ -383,7 +383,7 @@ export const ReceivingPage = () => {
                 </button>
                 <small>
                   Packing quantity, weight, and dimensions will start at zero
-                  and can be added later in SKU master.
+                  and can be added later from the SKU page.
                 </small>
               </div>
             )}

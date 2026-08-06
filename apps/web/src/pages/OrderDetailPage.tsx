@@ -218,11 +218,22 @@ export const OrderDetailPage = ({ orderId }: { orderId: string }) => {
         </div>
         <div>
           <span>Gross weight</span>
-          <strong>{order.grossWeight} kg</strong>
+          <strong>
+            {order.items.some((item) => item.weightPerCarton <= 0)
+              ? "Missing"
+              : `${order.grossWeight} kg`}
+          </strong>
         </div>
         <div>
           <span>Volume</span>
-          <strong>{formatDecimal(order.volume)} CBM</strong>
+          <strong>
+            {order.items.some(
+              (item) =>
+                item.length <= 0 || item.breadth <= 0 || item.height <= 0,
+            )
+              ? "Missing"
+              : `${formatDecimal(order.volume)} CBM`}
+          </strong>
         </div>
       </div>
       {order.orderNotes && <div className="notice">{order.orderNotes}</div>}

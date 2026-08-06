@@ -1,9 +1,14 @@
-import { dashboardSchema, type Dashboard } from "@kv-infra/shared";
+import {
+  dashboardSchema,
+  hasMissingSkuPackingDetails,
+  type Dashboard,
+} from "@kv-infra/shared";
 
 import type { OrderService } from "../orders/order.service.js";
 import type { PackingService } from "../packing/packing.service.js";
 import type { ReceivingService } from "../receiving/receiving.service.js";
 import type { SupplierRequestRepository } from "../supplier-requests/supplier-request.repository.js";
+import type { SkuService } from "../sku/sku.service.js";
 
 type DashboardAction = Dashboard["actions"][number];
 
@@ -30,14 +35,16 @@ export class DashboardService {
       "snapshot"
     >,
     private readonly receiving: Pick<ReceivingService, "recent">,
+    private readonly skus: Pick<SkuService, "list">,
   ) {}
 
   async get() {
-    const [orders, packing, requests, receipts] = await Promise.all([
+    const [orders, packing, requests, receipts, skus] = await Promise.all([
       this.orders.list(),
       this.packing.list(),
       this.supplierRequests.snapshot(),
       this.receiving.recent(6),
+      this.skus.list(),
     ]);
     const pendingOrders = orders.filter((order) => order.status === "PENDING");
     const completedOrders = orders.filter(
@@ -93,6 +100,18 @@ export class DashboardService {
         tone: "ATTENTION",
       }),
     );
+    skus
+      .filter(hasMissingSkuPackingDetails)
+      .slice(0, 3)
+      .forEach((sku) =>
+        actions.push({
+          id: `fill-sku-${sku.sku}`,
+          title: `Fill missing values for ${sku.sku} · ${sku.itemDescription}`,
+          detail: "Packing quantity, weight, or dimensions are missing.",
+          href: `/skus?sku=${encodeURIComponent(sku.sku)}`,
+          tone: "ATTENTION",
+        }),
+      );
     readyToShip.slice(0, 3).forEach((order) =>
       actions.push({
         id: `ship-${order.orderId}`,

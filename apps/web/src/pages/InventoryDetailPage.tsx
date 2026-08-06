@@ -90,7 +90,9 @@ export const InventoryDetailPage = ({ sku }: { sku: string }) => {
           <h1>{item.itemDescription}</h1>
         </div>
         <span>
-          {item.quantityPerCarton} {item.unit} / CTN
+          {item.quantityPerCarton > 0
+            ? `${item.quantityPerCarton} ${item.unit} / CTN`
+            : "Missing"}
         </span>
       </div>
       <div className="metric-grid inventory-metrics">

@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   calculateOrderLineTotals,
+  skuOems,
   type CreateOrderRequest,
   type Sku,
+  type SkuOem,
 } from "@kv-infra/shared";
 
-import { apiErrorMessage, createOrder, listSkus } from "../api/client";
+import {
+  apiErrorMessage,
+  createOrder,
+  createSku,
+  listSkus,
+} from "../api/client";
 import { formatDecimal } from "../lib/format-number";
 
 type DraftLine = { sku: string; skuQuery: string; cartons: number };
@@ -56,6 +63,19 @@ export const CreateOrderPage = () => {
   const [activeSkuLine, setActiveSkuLine] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showNewSku, setShowNewSku] = useState(false);
+  const [newSkuTargetLine, setNewSkuTargetLine] = useState(0);
+  const [newSkuOem, setNewSkuOem] = useState<SkuOem>("Bajaj");
+  const [newSkuDescription, setNewSkuDescription] = useState("");
+  const [newSkuQuantityPerCarton, setNewSkuQuantityPerCarton] = useState<
+    number | ""
+  >("");
+  const [creatingSku, setCreatingSku] = useState(false);
+  const [newSkuMessage, setNewSkuMessage] = useState("");
+  const newSkuQuantityIsValid =
+    typeof newSkuQuantityPerCarton === "number" &&
+    Number.isFinite(newSkuQuantityPerCarton) &&
+    newSkuQuantityPerCarton > 0;
 
   useEffect(() => {
     void listSkus()
@@ -87,6 +107,16 @@ export const CreateOrderPage = () => {
     }),
     { cartons: 0, quantity: 0, weight: 0, volume: 0 },
   );
+  const hasMissingWeight = preview.some(
+    (line) => line && line.skuDetails.weightPerCarton <= 0,
+  );
+  const hasMissingVolume = preview.some(
+    (line) =>
+      line &&
+      (line.skuDetails.length <= 0 ||
+        line.skuDetails.breadth <= 0 ||
+        line.skuDetails.height <= 0),
+  );
 
   const updateLine = (index: number, updates: Partial<DraftLine>) =>
     setLines((current) =>
@@ -94,6 +124,61 @@ export const CreateOrderPage = () => {
         lineIndex === index ? { ...line, ...updates } : line,
       ),
     );
+
+  const openNewSku = () => {
+    let target =
+      activeSkuLine ?? lines.findIndex((line) => line.sku.length === 0);
+    if (target < 0) {
+      target = lines.length;
+      setLines((current) => [
+        ...current,
+        { sku: "", skuQuery: "", cartons: 1 },
+      ]);
+    }
+    setNewSkuTargetLine(target);
+    setNewSkuDescription(lines[target]?.skuQuery.trim() ?? "");
+    setNewSkuMessage("");
+    setShowNewSku(true);
+    setActiveSkuLine(null);
+  };
+
+  const addNewSku = async () => {
+    const description = newSkuDescription.trim();
+    if (
+      !description ||
+      typeof newSkuQuantityPerCarton !== "number" ||
+      !Number.isFinite(newSkuQuantityPerCarton) ||
+      newSkuQuantityPerCarton <= 0
+    ) {
+      setNewSkuMessage("Enter an item description and quantity per carton.");
+      return;
+    }
+    setCreatingSku(true);
+    setNewSkuMessage("");
+    try {
+      const created = await createSku({
+        oem: newSkuOem,
+        itemDescription: description,
+        quantityPerCarton: newSkuQuantityPerCarton,
+      });
+      setSkus((items) => [...items, created]);
+      setLines((current) =>
+        current.map((line, index) =>
+          index === newSkuTargetLine
+            ? { ...line, sku: created.sku, skuQuery: skuLabel(created) }
+            : line,
+        ),
+      );
+      setShowNewSku(false);
+      setNewSkuOem("Bajaj");
+      setNewSkuDescription("");
+      setNewSkuQuantityPerCarton("");
+    } catch (error) {
+      setNewSkuMessage(apiErrorMessage(error));
+    } finally {
+      setCreatingSku(false);
+    }
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -162,17 +247,93 @@ export const CreateOrderPage = () => {
 
         <div className="section-heading order-lines-heading">
           <h2>Order items</h2>
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={skus.length === 0}
-            onClick={() =>
-              setLines([...lines, { sku: "", skuQuery: "", cartons: 1 }])
-            }
-          >
-            + Add item
-          </button>
+          <div className="order-item-actions">
+            <button
+              type="button"
+              className="text-button"
+              onClick={showNewSku ? () => setShowNewSku(false) : openNewSku}
+            >
+              {showNewSku ? "Cancel new SKU" : "+ Add a new SKU"}
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={skus.length === 0}
+              onClick={() =>
+                setLines([...lines, { sku: "", skuQuery: "", cartons: 1 }])
+              }
+            >
+              + Add item
+            </button>
+          </div>
         </div>
+        {showNewSku && (
+          <div className="receiving-new-sku order-new-sku">
+            <div className="section-heading">
+              <h3>Create new SKU</h3>
+            </div>
+            <div className="form-grid">
+              <label>
+                OEM
+                <select
+                  value={newSkuOem}
+                  onChange={(event) =>
+                    setNewSkuOem(event.target.value as SkuOem)
+                  }
+                >
+                  {skuOems.map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Item description
+                <input
+                  value={newSkuDescription}
+                  maxLength={200}
+                  placeholder="Item description"
+                  onChange={(event) => setNewSkuDescription(event.target.value)}
+                />
+              </label>
+              <label>
+                Quantity / CTN
+                <input
+                  type="number"
+                  min="0.000001"
+                  step="any"
+                  placeholder="Required for order quantity"
+                  value={newSkuQuantityPerCarton}
+                  onChange={(event) =>
+                    setNewSkuQuantityPerCarton(
+                      event.target.value === ""
+                        ? ""
+                        : event.target.valueAsNumber,
+                    )
+                  }
+                />
+              </label>
+            </div>
+            {newSkuMessage && (
+              <div className="notice error-notice">{newSkuMessage}</div>
+            )}
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={
+                creatingSku ||
+                !newSkuDescription.trim() ||
+                !newSkuQuantityIsValid
+              }
+              onClick={() => void addNewSku()}
+            >
+              {creatingSku ? "Creating…" : "Create and select SKU"}
+            </button>
+            <small>
+              Weight and dimensions will start at zero and can be added later
+              from the SKU page.
+            </small>
+          </div>
+        )}
         <div
           className="data-table order-editor"
           role="table"
@@ -277,11 +438,29 @@ export const CreateOrderPage = () => {
                     })
                   }
                 />
-                <span>{calculated?.skuDetails.quantityPerCarton ?? "—"}</span>
-                <strong>{calculated?.totalQuantity ?? "—"}</strong>
-                <span>{calculated?.grossWeight ?? "—"}</span>
                 <span>
-                  {calculated ? formatDecimal(calculated.volume) : "—"}
+                  {calculated
+                    ? calculated.skuDetails.quantityPerCarton > 0
+                      ? calculated.skuDetails.quantityPerCarton
+                      : "Missing"
+                    : "—"}
+                </span>
+                <strong>{calculated?.totalQuantity ?? "—"}</strong>
+                <span>
+                  {calculated
+                    ? calculated.skuDetails.weightPerCarton > 0
+                      ? calculated.grossWeight
+                      : "Missing"
+                    : "—"}
+                </span>
+                <span>
+                  {calculated
+                    ? calculated.skuDetails.length > 0 &&
+                      calculated.skuDetails.breadth > 0 &&
+                      calculated.skuDetails.height > 0
+                      ? formatDecimal(calculated.volume)
+                      : "Missing"
+                    : "—"}
                 </span>
                 <button
                   type="button"
@@ -311,11 +490,17 @@ export const CreateOrderPage = () => {
           </div>
           <div>
             <span>Gross weight</span>
-            <strong>{totals.weight} kg</strong>
+            <strong>
+              {hasMissingWeight ? "Missing" : `${totals.weight} kg`}
+            </strong>
           </div>
           <div>
             <span>Volume</span>
-            <strong>{formatDecimal(totals.volume)} CBM</strong>
+            <strong>
+              {hasMissingVolume
+                ? "Missing"
+                : `${formatDecimal(totals.volume)} CBM`}
+            </strong>
           </div>
         </div>
         {message && <div className="notice error-notice">{message}</div>}

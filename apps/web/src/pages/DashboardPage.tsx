@@ -7,7 +7,7 @@ const quickActions = [
   ["New order", "Create and check customer demand", "/orders/new"],
   ["Receive material", "Log incoming supplier stock", "/receiving"],
   ["Start packing", "Move unpacked stock into QA", "/packing/start"],
-  ["Create SKU", "Add a packing master item", "/skus"],
+  ["Create SKU", "Add a new item", "/skus"],
 ] as const;
 
 const readinessLabel: Record<Dashboard["orders"][number]["readiness"], string> =

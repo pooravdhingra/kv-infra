@@ -2,7 +2,7 @@
 
 ## Operator dashboard
 
-Load one prioritized queue from current orders, supplier requests, packing sessions, and recent receipts. Show failed WhatsApp sends and due follow-ups first, followed by in-packing work, ready-to-ship orders, unrequested supplier shortfalls, packing needs, and stock ready to reserve. Keep current pending orders and recent operational activity directly browsable. This is an action summary, not an analytics or forecasting layer.
+Load one prioritized queue from current orders, supplier requests, packing sessions, SKU metadata, and recent receipts. Show failed WhatsApp sends and due follow-ups first, followed by in-packing work, incomplete SKU packing values, ready-to-ship orders, unrequested supplier shortfalls, packing needs, and stock ready to reserve. Each incomplete-SKU action links directly to that SKU's editor. Keep current pending orders and recent operational activity directly browsable. This is an action summary, not an analytics or forecasting layer.
 
 ## Create SKU
 
@@ -14,7 +14,9 @@ After explicit operator confirmation, archive the matching Packing Master and In
 
 ## Create order and stock check
 
-Generate `ORD-YYYY-NNNN` and stable line IDs, create a collision-safe `Customer - DD Mon YYYY` order tab, copy SKU master fields, and write visible formulas for quantity, gross weight, and CBM. Compare each line's required quantity with packed available and unpacked quantities. A refresh rewrites stock status, shortfall, and last-updated cells but never assigns stock.
+Allow an operator to create a missing SKU without leaving the order form. This quick path requires OEM, item description, and quantity per carton so demand can be calculated; weight and dimensions default to zero for later editing on the SKU page.
+
+Generate `ORD-YYYY-NNNN` and stable line IDs, create a collision-safe `Customer - DD Mon YYYY` order tab, copy SKU fields, and write visible formulas for quantity, gross weight, and CBM. Compare each line's required quantity with packed available and unpacked quantities. A refresh rewrites stock status, shortfall, and last-updated cells but never assigns stock.
 
 List every created order as pending until an operator ships it. Show **Ship order** only when every line is fully packed and reserved. On confirmation, consume the exact packed cartons and matching assignments from Inventory, write `SHIPPED` and one completion timestamp to every line, remove the order from Pending Orders, and retain it in the browsable Completed Orders tab. Compensate Inventory if the order-tab completion write fails. Do not allow stock refreshes or allocation changes after completion.
 
@@ -31,6 +33,8 @@ Validate an active SKU, append `RECEIVING LOG`, and increase only `UNPACKED QTY`
 Atomically subtract the selected quantity from `UNPACKED QTY`, add it to `IN PACKING QTY`, and append an `IN PACKING` QA event. Reject insufficient or non-positive quantities and linked quantities above the exact line's remaining demand.
 
 ## Finish packing / QA
+
+Offer a collapsible dimensional-information editor on every finish screen. Open it automatically when quantity per carton, weight, length, breadth, or height is zero, display those values as Missing, and let the operator save measurements to the SKU as part of finishing. Metadata completion is optional, although quantity per carton is inherently needed to record good complete cartons.
 
 Subtract the amount taken from `IN PACKING QTY`, add good complete cartons to `PACKED CTNS`, add defect and shortage quantities, and append a `FINISHED` QA event without editing the start event. Reject totals that do not reconcile or good quantities that are not complete cartons. Explicitly linked good stock is auto-assigned to that line, with an allocation row and order reserved-quantity update.
 

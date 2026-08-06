@@ -23,7 +23,7 @@ One authenticated operator role. Role management and customer access are not par
 ## Primary screens
 
 - Operator login and action-focused home
-- SKU master and create/edit form
+- SKU list and create/edit form
 - New order and order detail/stock check
 - Supplier request and pending requests
 - Receive material

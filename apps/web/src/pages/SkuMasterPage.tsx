@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { skuOems, skuUnits, type Sku, type SkuOem } from "@kv-infra/shared";
 
 import {
@@ -34,6 +34,18 @@ const numberFields = [
   ["height", "Height (cm)"],
 ] as const;
 
+const skuToForm = (sku: Sku): SkuForm => ({
+  ...sku,
+  quantityPerCarton: sku.quantityPerCarton || "",
+  weightPerCarton: sku.weightPerCarton || "",
+  length: sku.length || "",
+  breadth: sku.breadth || "",
+  height: sku.height || "",
+});
+
+const displayPackingValue = (value: number, suffix = "") =>
+  value > 0 ? `${value}${suffix}` : "Missing";
+
 export const SkuMasterPage = () => {
   const [skus, setSkus] = useState<Sku[]>([]);
   const [form, setForm] = useState<SkuForm>(emptySku);
@@ -44,11 +56,27 @@ export const SkuMasterPage = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formCollapsed, setFormCollapsed] = useState(false);
+  const requestedSku = useRef(
+    new URLSearchParams(window.location.search).get("sku")?.toUpperCase() ?? "",
+  );
+  const handledRequestedSku = useRef(false);
 
   const load = async () => {
     setLoading(true);
     try {
-      setSkus(await listSkus());
+      const items = await listSkus();
+      setSkus(items);
+      if (!handledRequestedSku.current) {
+        handledRequestedSku.current = true;
+        const requested = items.find(
+          (item) => item.sku === requestedSku.current,
+        );
+        if (requested) {
+          setForm(skuToForm(requested));
+          setEditing(true);
+          setFormCollapsed(false);
+        }
+      }
     } catch (error) {
       setMessage(apiErrorMessage(error));
     } finally {
@@ -124,7 +152,7 @@ export const SkuMasterPage = () => {
     <section className="page-panel">
       <div className="page-title-row">
         <div>
-          <h1>SKU master</h1>
+          <h1>SKU</h1>
         </div>
         <span>{skus.length} SKUs</span>
       </div>
@@ -157,16 +185,16 @@ export const SkuMasterPage = () => {
                 <div className="table-row" role="row" key={sku.sku}>
                   <strong>{sku.sku}</strong>
                   <span>{sku.itemDescription}</span>
-                  <span>{sku.quantityPerCarton}</span>
+                  <span>{displayPackingValue(sku.quantityPerCarton)}</span>
                   <span>{sku.unit}</span>
-                  <span>{sku.weightPerCarton} kg</span>
-                  <span>{sku.length} cm</span>
-                  <span>{sku.breadth} cm</span>
-                  <span>{sku.height} cm</span>
+                  <span>{displayPackingValue(sku.weightPerCarton, " kg")}</span>
+                  <span>{displayPackingValue(sku.length, " cm")}</span>
+                  <span>{displayPackingValue(sku.breadth, " cm")}</span>
+                  <span>{displayPackingValue(sku.height, " cm")}</span>
                   <button
                     className="text-button"
                     onClick={() => {
-                      setForm(sku);
+                      setForm(skuToForm(sku));
                       setEditing(true);
                       setFormCollapsed(false);
                       setMessage("");
@@ -262,7 +290,7 @@ export const SkuMasterPage = () => {
                     min="0"
                     step="any"
                     required={editing}
-                    placeholder="0"
+                    placeholder="Missing"
                     value={form[name]}
                     onChange={(event) => {
                       const value = event.target.value;

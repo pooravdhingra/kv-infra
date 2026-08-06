@@ -4,7 +4,7 @@ import { getGoogleStatus, getWhatsAppStatus } from "../api/client";
 
 const links = [
   ["/", "Home"],
-  ["/skus", "SKU master"],
+  ["/skus", "SKU"],
   ["/orders", "Orders"],
   ["/receiving", "Receive"],
   ["/packing", "Packing"],

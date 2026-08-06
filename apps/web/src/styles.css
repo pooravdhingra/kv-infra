@@ -517,6 +517,14 @@ main {
 .order-lines-heading {
   margin-top: 30px;
 }
+.order-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.order-new-sku {
+  max-width: 760px;
+}
 .order-edit-row {
   grid-template-columns: minmax(250px, 2fr) 90px repeat(4, 92px) 62px;
   min-width: 900px;
@@ -984,6 +992,25 @@ main {
 }
 .workflow-nav .back-link {
   margin-bottom: 0;
+}
+.packing-details-notice {
+  margin-bottom: 14px;
+}
+.packing-details-toggle {
+  margin-bottom: 14px;
+}
+.packing-dimensions-panel {
+  margin-bottom: 20px;
+  padding: 16px;
+  border: 1px solid #d9d6cc;
+  border-radius: 5px;
+  background: #f2efe7;
+}
+.packing-dimensions-panel > small {
+  display: block;
+  color: #77796f;
+  font-size: 11px;
+  line-height: 1.45;
 }
 .receiving-layout {
   display: grid;

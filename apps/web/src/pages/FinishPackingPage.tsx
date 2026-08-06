@@ -1,13 +1,52 @@
 import { useEffect, useState, type FormEvent } from "react";
-import type { PackingSession } from "@kv-infra/shared";
+import {
+  hasMissingSkuPackingDetails,
+  missingSkuPackingFields,
+  type PackingSession,
+  type Sku,
+  type SkuPackingNumericField,
+} from "@kv-infra/shared";
 
-import { apiErrorMessage, finishPacking, listPacking } from "../api/client";
+import {
+  apiErrorMessage,
+  finishPacking,
+  getSku,
+  listPacking,
+  updateSku,
+} from "../api/client";
+
+type DimensionForm = Record<SkuPackingNumericField, string>;
+
+const dimensionFields: Array<[SkuPackingNumericField, string, string]> = [
+  ["quantityPerCarton", "Quantity / CTN", ""],
+  ["weightPerCarton", "Weight / CTN", "kg"],
+  ["length", "Length", "cm"],
+  ["breadth", "Breadth", "cm"],
+  ["height", "Height", "cm"],
+];
+
+const toDimensionForm = (sku: Sku): DimensionForm => ({
+  quantityPerCarton:
+    sku.quantityPerCarton > 0 ? String(sku.quantityPerCarton) : "",
+  weightPerCarton: sku.weightPerCarton > 0 ? String(sku.weightPerCarton) : "",
+  length: sku.length > 0 ? String(sku.length) : "",
+  breadth: sku.breadth > 0 ? String(sku.breadth) : "",
+  height: sku.height > 0 ? String(sku.height) : "",
+});
+
+const dimensionValue = (value: string) => Number(value || 0);
 
 export const FinishPackingPage = ({ packingId }: { packingId: string }) => {
   const [date, setDate] = useState(() =>
     new Date().toLocaleDateString("en-CA"),
   );
   const [session, setSession] = useState<PackingSession | null>(null);
+  const [skuDetails, setSkuDetails] = useState<Sku | null>(null);
+  const [dimensionForm, setDimensionForm] = useState<DimensionForm | null>(
+    null,
+  );
+  const [dimensionsOpen, setDimensionsOpen] = useState(false);
+  const [dimensionsDirty, setDimensionsDirty] = useState(false);
   const [packedCartons, setPackedCartons] = useState("");
   const [defective, setDefective] = useState("");
   const [short, setShort] = useState("");
@@ -17,17 +56,21 @@ export const FinishPackingPage = ({ packingId }: { packingId: string }) => {
 
   useEffect(() => {
     void listPacking()
-      .then((data) => {
+      .then(async (data) => {
         const found = data.sessions.find(
           (item) => item.packingId === packingId,
         );
         if (!found) throw new Error(`${packingId} was not found`);
-        setSession(found);
+        const sku = await getSku(found.sku);
+        setSkuDetails(sku);
+        setDimensionForm(toDimensionForm(sku));
+        setDimensionsOpen(hasMissingSkuPackingDetails(sku));
+        setSession({ ...found, quantityPerCarton: sku.quantityPerCarton });
       })
       .catch((error) => setMessage(apiErrorMessage(error)));
   }, [packingId]);
 
-  if (!session)
+  if (!session || !skuDetails || !dimensionForm)
     return (
       <section className="page-panel">
         <p>{message || "Loading packing session…"}</p>
@@ -36,11 +79,13 @@ export const FinishPackingPage = ({ packingId }: { packingId: string }) => {
   const packedCartonCount = Number(packedCartons || 0);
   const defectiveQuantity = Number(defective || 0);
   const shortQuantity = Number(short || 0);
-  const good = packedCartonCount * session.quantityPerCarton;
+  const quantityPerCarton = dimensionValue(dimensionForm.quantityPerCarton);
+  const good = packedCartonCount * quantityPerCarton;
   const accounted = good + defectiveQuantity + shortQuantity;
   const unaccounted =
     Math.round((session.quantityTaken - accounted) * 1_000_000) / 1_000_000;
   const valid = unaccounted === 0 && Number.isInteger(packedCartonCount);
+  const missingFields = missingSkuPackingFields(skuDetails);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -53,6 +98,24 @@ export const FinishPackingPage = ({ packingId }: { packingId: string }) => {
     setSaving(true);
     setMessage("");
     try {
+      if (dimensionsDirty) {
+        const updated = await updateSku(session.sku, {
+          itemDescription: skuDetails.itemDescription,
+          unit: skuDetails.unit,
+          quantityPerCarton,
+          weightPerCarton: dimensionValue(dimensionForm.weightPerCarton),
+          length: dimensionValue(dimensionForm.length),
+          breadth: dimensionValue(dimensionForm.breadth),
+          height: dimensionValue(dimensionForm.height),
+        });
+        setSkuDetails(updated);
+        setSession((current) =>
+          current
+            ? { ...current, quantityPerCarton: updated.quantityPerCarton }
+            : current,
+        );
+        setDimensionsDirty(false);
+      }
       await finishPacking(packingId, {
         date,
         goodQuantity: good,
@@ -89,7 +152,9 @@ export const FinishPackingPage = ({ packingId }: { packingId: string }) => {
         </div>
         <div>
           <span>Qty / carton</span>
-          <strong>{session.quantityPerCarton}</strong>
+          <strong>
+            {quantityPerCarton > 0 ? quantityPerCarton : "Missing"}
+          </strong>
         </div>
         <div>
           <span>Linked order</span>
@@ -97,6 +162,58 @@ export const FinishPackingPage = ({ packingId }: { packingId: string }) => {
         </div>
       </div>
       <form className="sku-form workflow-form" onSubmit={submit}>
+        {missingFields.length > 0 && (
+          <div className="notice packing-details-notice">
+            This SKU has missing packing values. Add measurements recorded
+            during packing now, or leave them for later.
+          </div>
+        )}
+        <button
+          type="button"
+          className="form-collapse-button packing-details-toggle"
+          aria-expanded={dimensionsOpen}
+          aria-controls="packing-dimensional-info"
+          onClick={() => setDimensionsOpen((open) => !open)}
+        >
+          {dimensionsOpen ? "Hide dimensional info" : "Edit dimensional info"}
+        </button>
+        {dimensionsOpen && (
+          <div
+            id="packing-dimensional-info"
+            className="packing-dimensions-panel"
+          >
+            <div className="section-heading">
+              <h2>SKU packing information</h2>
+              <span>Optional</span>
+            </div>
+            <div className="form-grid">
+              {dimensionFields.map(([field, label, unit]) => (
+                <label key={field}>
+                  {label}
+                  {unit ? ` (${unit})` : ""}
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder="Missing"
+                    value={dimensionForm[field]}
+                    onChange={(event) => {
+                      setDimensionForm({
+                        ...dimensionForm,
+                        [field]: event.target.value,
+                      });
+                      setDimensionsDirty(true);
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+            <small>
+              Entered values will be saved to the SKU when packing is finished.
+              Empty values remain marked Missing.
+            </small>
+          </div>
+        )}
         <label>
           Date finished
           <input

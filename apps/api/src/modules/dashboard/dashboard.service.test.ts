@@ -96,6 +96,20 @@ describe("DashboardService", () => {
             },
           ] as never,
       },
+      {
+        list: async () => [
+          {
+            sku: "KV-X000001",
+            itemDescription: "New unfinished item",
+            quantityPerCarton: 0,
+            unit: "pcs",
+            weightPerCarton: 0,
+            length: 0,
+            breadth: 0,
+            height: 0,
+          },
+        ],
+      },
     );
 
     const dashboard = await service.get();
@@ -116,6 +130,12 @@ describe("DashboardService", () => {
     ]);
     expect(dashboard.actions.map((action) => action.id)).toContain(
       "supplier-ORD-2026-0002",
+    );
+    expect(dashboard.actions).toContainEqual(
+      expect.objectContaining({
+        id: "fill-sku-KV-X000001",
+        title: "Fill missing values for KV-X000001 · New unfinished item",
+      }),
     );
     expect(dashboard.orders[0]).toMatchObject({
       orderId: "ORD-2026-0002",

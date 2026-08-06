@@ -119,6 +119,7 @@ export const createApp = () => {
     packingService,
     supplierRequestRepository,
     receivingService,
+    skuService,
   );
 
   app.use(`${API_PREFIX}/dashboard`, createDashboardRouter(dashboardService));
