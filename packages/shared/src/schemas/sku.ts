@@ -1,6 +1,8 @@
 import { z } from "zod";
 
-export const skuUnits = ["pcs", "kg", "roll", "meter", "set"] as const;
+// Stored legacy units remain readable, while new SKUs use the focused form list.
+export const skuUnits = ["pcs", "kg", "roll", "meter", "set", "kit"] as const;
+export const skuCreationUnits = ["pcs", "set", "kit"] as const;
 export const skuOems = ["Bajaj", "TVS", "Piaggio", "Other"] as const;
 
 export const skuCodeSchema = z
@@ -25,7 +27,7 @@ export const skuSchema = z.object({
 export const createSkuRequestSchema = skuSchema.omit({ sku: true }).extend({
   oem: z.enum(skuOems),
   quantityPerCarton: z.number().nonnegative().default(0),
-  unit: z.enum(skuUnits).default("pcs"),
+  unit: z.enum(skuCreationUnits).default("pcs"),
   weightPerCarton: z.number().nonnegative().default(0),
   length: z.number().nonnegative().default(0),
   breadth: z.number().nonnegative().default(0),

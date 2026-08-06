@@ -91,7 +91,11 @@ export const OrdersPage = () => {
                 <span>{order.customerName}</span>
                 <span>{order.dateReceived}</span>
                 <span>{order.items.length}</span>
-                <span>{order.totalCartons}</span>
+                <span>
+                  {order.items.some((item) => item.quantityPerCarton <= 0)
+                    ? "Missing"
+                    : order.totalCartons}
+                </span>
                 <span className={`stock-badge ${status.className}`}>
                   {status.label}
                 </span>

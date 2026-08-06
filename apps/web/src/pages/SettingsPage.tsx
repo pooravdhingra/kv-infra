@@ -24,7 +24,10 @@ export const SettingsPage = () => {
   const [status, setStatus] = useState<Status | null>(null);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<
+    "connect" | "test" | "disconnect" | ""
+  >("");
+  const busy = Boolean(busyAction);
   const [whatsappStatus, setWhatsAppStatus] = useState<WhatsAppStatus | null>(
     null,
   );
@@ -78,18 +81,18 @@ export const SettingsPage = () => {
   }, [qr]);
 
   const connect = async () => {
-    setBusy(true);
+    setBusyAction("connect");
     setMessage("");
     try {
       window.location.assign(await getGoogleAuthUrl());
     } catch (error) {
       setMessage(apiErrorMessage(error));
-      setBusy(false);
+      setBusyAction("");
     }
   };
 
   const test = async () => {
-    setBusy(true);
+    setBusyAction("test");
     setMessage("");
     try {
       setTestResult(await testGoogleConnection());
@@ -97,12 +100,12 @@ export const SettingsPage = () => {
     } catch (error) {
       setMessage(apiErrorMessage(error));
     } finally {
-      setBusy(false);
+      setBusyAction("");
     }
   };
 
   const disconnect = async () => {
-    setBusy(true);
+    setBusyAction("disconnect");
     setMessage("");
     try {
       await disconnectGoogle();
@@ -112,7 +115,7 @@ export const SettingsPage = () => {
     } catch (error) {
       setMessage(apiErrorMessage(error));
     } finally {
-      setBusy(false);
+      setBusyAction("");
     }
   };
 
@@ -162,6 +165,7 @@ export const SettingsPage = () => {
           {!status?.connected && (
             <button
               className="primary-button"
+              aria-busy={busyAction === "connect"}
               onClick={connect}
               disabled={busy || !status?.configured}
             >
@@ -170,11 +174,17 @@ export const SettingsPage = () => {
           )}
           {status?.connected && (
             <>
-              <button className="primary-button" onClick={test} disabled={busy}>
+              <button
+                className="primary-button"
+                aria-busy={busyAction === "test"}
+                onClick={test}
+                disabled={busy}
+              >
                 Test Sheets connection
               </button>
               <button
                 className="secondary-button"
+                aria-busy={busyAction === "connect"}
                 onClick={connect}
                 disabled={busy}
               >
@@ -182,6 +192,7 @@ export const SettingsPage = () => {
               </button>
               <button
                 className="secondary-button"
+                aria-busy={busyAction === "disconnect"}
                 onClick={disconnect}
                 disabled={busy}
               >

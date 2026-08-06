@@ -30,7 +30,7 @@ export class PackingService {
     private readonly inventoryRepository: InventoryRepository,
     private readonly orders: Pick<
       OrderService,
-      "list" | "recordAllocation" | "adjustAllocation"
+      "list" | "recordAllocation" | "adjustAllocation" | "syncSkuPackingDetails"
     >,
   ) {}
 
@@ -122,15 +122,11 @@ export class PackingService {
             item.orderLineId === request.orderLineId &&
             item.sku === request.sku,
         );
-      if (
-        !line ||
-        line.remainingQuantity <= 0 ||
-        request.quantityTaken > line.remainingQuantity
-      )
+      if (!line || line.remainingQuantity <= 0)
         throw new AppError(
           409,
           "INVALID_ORDER_LINK",
-          "Packing quantity exceeds the linked order-line requirement",
+          "The linked order line has no remaining requirement",
         );
     }
     let movement;
@@ -162,6 +158,7 @@ export class PackingService {
       packedCartons: 0,
       defectiveQuantity: 0,
       shortQuantity: 0,
+      leftUnpackedQuantity: 0,
       assignedToOrder: false,
       orderId: request.orderId ?? null,
       orderLineId: request.orderLineId ?? null,
@@ -206,10 +203,12 @@ export class PackingService {
         "INVENTORY_NOT_FOUND",
         `Inventory for ${started.sku} was not found`,
       );
+    await this.orders.syncSkuPackingDetails(started.sku);
     let movement;
     try {
       movement = finishPackingTransition({
         quantityPerCarton: current.quantityPerCarton,
+        unpackedQuantity: current.unpackedQuantity,
         inPackingQuantity: current.inPackingQuantity,
         packedCartons: current.packedCartons,
         defectiveShortQuantity: current.defectiveShortQuantity,
@@ -218,6 +217,7 @@ export class PackingService {
         finishedCartons: request.packedCartons,
         defectiveQuantity: request.defectiveQuantity,
         shortQuantity: request.shortQuantity,
+        leftUnpackedQuantity: request.leftUnpackedQuantity,
       });
     } catch (error) {
       throw new AppError(
@@ -233,41 +233,43 @@ export class PackingService {
       const line = (await this.orders.list())
         .find((order) => order.orderId === started.orderId)
         ?.items.find((item) => item.orderLineId === started.orderLineId);
-      if (!line || request.goodQuantity > line.remainingQuantity)
+      if (!line)
         throw new AppError(
           409,
           "INVALID_ALLOCATION",
-          "Good quantity exceeds the linked order-line requirement",
+          "The linked order line was not found",
         );
-      assignedQuantity = request.goodQuantity;
-      try {
-        nextAssigned = assignInventoryTransition({
-          quantityPerCarton: current.quantityPerCarton,
-          packedCartons: movement.packedCartons,
-          totalAssigned: current.totalAssigned,
-          quantityAssigned: assignedQuantity,
-        });
-      } catch (error) {
-        throw new AppError(
-          409,
-          "INVALID_ALLOCATION",
-          error instanceof Error ? error.message : "Stock cannot be assigned",
+      assignedQuantity = Math.min(request.goodQuantity, line.remainingQuantity);
+      if (assignedQuantity > 0) {
+        try {
+          nextAssigned = assignInventoryTransition({
+            quantityPerCarton: current.quantityPerCarton,
+            packedCartons: movement.packedCartons,
+            totalAssigned: current.totalAssigned,
+            quantityAssigned: assignedQuantity,
+          });
+        } catch (error) {
+          throw new AppError(
+            409,
+            "INVALID_ALLOCATION",
+            error instanceof Error ? error.message : "Stock cannot be assigned",
+          );
+        }
+        const allocationId = sequenceId(
+          "ALLOC",
+          Number(started.date.slice(0, 4)),
+          await this.repository.listAllocationIds(),
         );
+        allocationRow = [
+          allocationId,
+          started.orderId,
+          started.orderLineId,
+          started.sku,
+          started.itemDescription,
+          assignedQuantity,
+          `[PACKING ID: ${packingId}] Auto-assigned after QA`,
+        ];
       }
-      const allocationId = sequenceId(
-        "ALLOC",
-        Number(started.date.slice(0, 4)),
-        await this.repository.listAllocationIds(),
-      );
-      allocationRow = [
-        allocationId,
-        started.orderId,
-        started.orderLineId,
-        started.sku,
-        started.itemDescription,
-        assignedQuantity,
-        `[PACKING ID: ${packingId}] Auto-assigned after QA`,
-      ];
     }
     const finished: PackingEvent = {
       ...started,
@@ -276,6 +278,7 @@ export class PackingService {
       packedCartons: request.packedCartons,
       defectiveQuantity: request.defectiveQuantity,
       shortQuantity: request.shortQuantity,
+      leftUnpackedQuantity: request.leftUnpackedQuantity,
       assignedToOrder: assignedQuantity > 0,
       status: "FINISHED",
       notes: request.notes,
@@ -333,6 +336,7 @@ export class PackingService {
       event.orderLineId ?? "",
       event.status,
       event.notes,
+      event.leftUnpackedQuantity,
     ];
   }
 }

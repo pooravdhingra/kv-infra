@@ -1,5 +1,6 @@
 import {
   ORDER_HEADERS,
+  calculateCartonsFromTotalQuantity,
   type InventoryItem,
   type OrderLine,
   type Sku,
@@ -11,6 +12,7 @@ import type { AllocationRepository } from "../allocations/allocation.repository.
 import type {
   OrderRepository,
   OrderSheetSnapshot,
+  OrderSkuPackingUpdate,
 } from "./order.repository.js";
 import { generateNextOrderId, OrderService } from "./order.service.js";
 
@@ -48,6 +50,7 @@ class FakeOrderRepository implements OrderRepository {
   sheets: OrderSheetSnapshot[] = [];
   written: unknown[][] = [];
   stockCheckWrites: OrderLine[] = [];
+  skuPackingUpdates: OrderSkuPackingUpdate[] = [];
   completionWrites: Array<{
     title: string;
     lineCount: number;
@@ -71,6 +74,24 @@ class FakeOrderRepository implements OrderRepository {
   }
   async updateStockCheck(_title: string, items: OrderLine[]) {
     this.stockCheckWrites = items;
+  }
+  async updateSkuPackingDetails(updates: OrderSkuPackingUpdate[]) {
+    this.skuPackingUpdates = updates;
+    updates.forEach((update) => {
+      const row = this.sheets
+        .find((sheet) => sheet.title === update.title)
+        ?.rows.at(update.rowNumber - 1);
+      if (!row) return;
+      row[2] = update.sku.quantityPerCarton;
+      row[4] = calculateCartonsFromTotalQuantity(
+        update.totalQuantity,
+        update.sku.quantityPerCarton,
+      );
+      row[6] = update.sku.weightPerCarton;
+      row[10] = update.sku.length;
+      row[11] = update.sku.breadth;
+      row[12] = update.sku.height;
+    });
   }
   async completeOrder(title: string, lineCount: number, completedAt: string) {
     this.completionWrites.push({ title, lineCount, completedAt });
@@ -115,24 +136,26 @@ describe("OrderService", () => {
       skuRepository,
       inventoryService,
     ).create({
-      customerName: "ABC Traders",
+      customerName: "Abc Traders",
       dateReceived: "2026-08-04",
       orderNotes: "Handle carefully",
       items: [{ sku: "KV-000001", cartons: 10 }],
     });
 
     expect(result.orderId).toBe("ORD-2026-0001");
+    expect(result.customerName).toBe("ABC TRADERS");
+    expect(repository.written[1]?.[22]).toBe("ABC TRADERS");
     expect(result.items[0]).toMatchObject({
       totalQuantity: 1000,
       grossWeight: 125,
-      volume: 0.6,
+      volume: 9.832238,
       shortfallQuantity: 400,
       stockStatus: "NEEDS_PACKING",
       suggestedAction: "START_PACKING",
     });
     expect(repository.written[0]).toEqual([...ORDER_HEADERS]);
     expect(repository.written[1]?.[5]).toBe("=E2*C2");
-    expect(repository.written[1]?.[8]).toBe("=K2*L2*M2*E2/1000000");
+    expect(repository.written[1]?.[8]).toBe("=K2*L2*M2*E2*0.000016387064");
   });
 
   it("rejects an inactive or unknown SKU", async () => {
@@ -149,27 +172,76 @@ describe("OrderService", () => {
     ).rejects.toMatchObject({ code: "UNKNOWN_SKU", status: 400 });
   });
 
-  it("rejects an order for a provisional SKU without carton quantity", async () => {
+  it("creates a direct-quantity order and later backfills carton details", async () => {
     const repository = new FakeOrderRepository();
-    const provisionalSku = { ...sku, quantityPerCarton: 0 };
-    await expect(
-      new OrderService(
-        repository,
-        {
-          ...skuRepository,
-          listSkus: async () => [{ ...provisionalSku, rowNumber: 2 }],
-        },
-        { list: async () => [{ ...inventory, quantityPerCarton: 0 }] },
-      ).create({
-        customerName: "ABC Traders",
-        dateReceived: "2026-08-04",
-        items: [{ sku: provisionalSku.sku, cartons: 1 }],
-      }),
-    ).rejects.toMatchObject({
-      code: "SKU_PACKING_DETAILS_REQUIRED",
-      status: 409,
+    let currentSku = {
+      ...sku,
+      quantityPerCarton: 0,
+      weightPerCarton: 0,
+      length: 0,
+      breadth: 0,
+      height: 0,
+    };
+    const service = new OrderService(
+      repository,
+      {
+        ...skuRepository,
+        listSkus: async () => [{ ...currentSku, rowNumber: 2 }],
+      },
+      { list: async () => [{ ...inventory, quantityPerCarton: 0 }] },
+    );
+    const created = await service.create({
+      customerName: "ABC Traders",
+      dateReceived: "2026-08-04",
+      items: [{ sku: currentSku.sku, totalQuantity: 7500 }],
     });
-    expect(repository.written).toEqual([]);
+
+    expect(created.items[0]).toMatchObject({
+      quantityPerCarton: 0,
+      cartons: 0,
+      totalQuantity: 7500,
+    });
+    expect(repository.written[1]?.[4]).toBe("");
+    expect(repository.written[1]?.[5]).toBe(7500);
+
+    repository.sheets = [
+      { sheetId: 99, title: created.sheetTitle, rows: repository.written },
+    ];
+    await expect(service.get(created.orderId)).resolves.toMatchObject({
+      items: [
+        {
+          quantityPerCarton: 0,
+          cartons: 0,
+          totalQuantity: 7500,
+        },
+      ],
+    });
+    currentSku = {
+      ...currentSku,
+      quantityPerCarton: 100,
+      weightPerCarton: 12,
+      length: 20,
+      breadth: 16,
+      height: 12,
+    };
+    await expect(service.syncSkuPackingDetails(currentSku.sku)).resolves.toBe(
+      1,
+    );
+    expect(repository.skuPackingUpdates[0]).toMatchObject({
+      title: created.sheetTitle,
+      rowNumber: 2,
+      totalQuantity: 7500,
+      sku: currentSku,
+    });
+    await expect(service.get(created.orderId)).resolves.toMatchObject({
+      items: [
+        {
+          quantityPerCarton: 100,
+          cartons: 75,
+          totalQuantity: 7500,
+        },
+      ],
+    });
   });
 
   it("persists a refreshed stock check to its order tab", async () => {

@@ -52,10 +52,7 @@ export const StartPackingPage = () => {
   const selectedOrder = options.find(
     (item) => item.orderLineId === orderLineId,
   );
-  const maxQuantity = Math.min(
-    selected?.unpackedQuantity ?? 0,
-    selectedOrder?.remainingQuantity ?? Number.POSITIVE_INFINITY,
-  );
+  const maxQuantity = selected?.unpackedQuantity ?? 0;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -180,6 +177,7 @@ export const StartPackingPage = () => {
         {message && <div className="notice error-notice">{message}</div>}
         <button
           className="primary-button"
+          aria-busy={saving}
           disabled={
             saving || !selected || quantity <= 0 || quantity > maxQuantity
           }

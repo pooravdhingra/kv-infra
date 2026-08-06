@@ -23,7 +23,7 @@ export const generateNextSkuCode = (
   oem: SkuOem,
 ) => {
   const prefix = OEM_PREFIX[oem];
-  const pattern = new RegExp(`^(?:DELETED-)?KV-${prefix}(\\d{6,})$`);
+  const pattern = new RegExp(`^(?:DELETED-)?KV-${prefix}(\\d{4,})$`);
   const highestSequence = skus.reduce((highest, item) => {
     const match = pattern.exec(item.sku);
     if (!match) return highest;
@@ -33,7 +33,7 @@ export const generateNextSkuCode = (
       : highest;
   }, 0);
 
-  return `KV-${prefix}${String(highestSequence + 1).padStart(6, "0")}`;
+  return `KV-${prefix}${String(highestSequence + 1).padStart(4, "0")}`;
 };
 
 export class SkuService {
@@ -61,7 +61,11 @@ export class SkuService {
       this.repository.listSkus(),
       this.repository.listInventory(),
     ]);
-    const sku = { sku: generateNextSkuCode(skus, oem), ...details };
+    const sku = {
+      sku: generateNextSkuCode(skus, oem),
+      ...details,
+      itemDescription: details.itemDescription.toUpperCase(),
+    };
 
     await this.repository.appendSku(sku);
     await this.repository.appendInventory(sku, inventory.length + 2);
@@ -72,7 +76,11 @@ export class SkuService {
   async update(rawSku: string, input: unknown) {
     const skuCode = skuSchema.shape.sku.parse(rawSku);
     const updates = updateSkuRequestSchema.parse(input);
-    const sku = { sku: skuCode, ...updates };
+    const sku = {
+      sku: skuCode,
+      ...updates,
+      itemDescription: updates.itemDescription.toUpperCase(),
+    };
     const [skus, inventory] = await Promise.all([
       this.repository.listSkus(),
       this.repository.listInventory(),

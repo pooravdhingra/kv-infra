@@ -155,6 +155,7 @@ export const GroupSupplierRequestsPage = () => {
         </div>
         <button
           className="primary-button"
+          aria-busy={saving}
           disabled={saving || !readyToSend}
           onClick={() => void sendAll()}
         >

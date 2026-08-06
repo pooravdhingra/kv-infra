@@ -533,6 +533,11 @@ main {
   margin: 0;
   padding: 10px;
 }
+.order-edit-row input:disabled {
+  background: #ece9e0;
+  color: #77796f;
+  cursor: not-allowed;
+}
 .sku-combobox {
   align-self: start;
   min-width: 0;
@@ -1221,11 +1226,36 @@ main {
 .dashboard-hero {
   max-width: 900px;
 }
+button[aria-busy="true"]::after {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-left: 8px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  content: "";
+  vertical-align: -0.12em;
+  animation: button-spin 0.7s linear infinite;
+}
+@keyframes button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  button[aria-busy="true"]::after {
+    animation-duration: 1.5s;
+  }
+}
 .dashboard-metrics {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-top: 38px;
+}
+.packing-unpacked-heading {
+  margin-top: 36px;
 }
 .dashboard-metrics a {
   display: flex;

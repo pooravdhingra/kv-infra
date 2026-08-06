@@ -33,6 +33,19 @@ const envSchema = z.object({
   ORDER_ALLOCATIONS_SHEET_NAME: z.string().default("ORDER ALLOCATIONS"),
   SUPPLIER_REQUESTS_SHEET_NAME: z.string().default("SUPPLIER REQUESTS"),
   WHATSAPP_LOG_SHEET_NAME: z.string().default("WHATSAPP LOG"),
+  GOOGLE_SHEETS_TIMEOUT_MS: z.coerce.number().int().min(1_000).default(10_000),
+  GOOGLE_SHEETS_RETRY_ATTEMPTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(6)
+    .default(4),
+  GOOGLE_SHEETS_RETRY_BASE_DELAY_MS: z.coerce
+    .number()
+    .int()
+    .min(100)
+    .default(500),
+  GOOGLE_SHEETS_READ_CACHE_MS: z.coerce.number().int().min(0).default(15_000),
   BAILEYS_AUTH_DIR: z.string().default(".secrets/baileys-auth"),
   OPERATOR_TIME_ZONE: z.string().default("Asia/Kolkata"),
   AUTO_FOLLOWUPS_ENABLED: z

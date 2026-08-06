@@ -1,10 +1,12 @@
 import {
   ORDER_HEADERS,
+  calculateCartonsFromTotalQuantity,
   calculateOrderLineTotals,
   calculateStockCheck,
   createOrderRequestSchema,
   getSuggestedAction,
   orderSchema,
+  skuCodeSchema,
   shipInventoryTransition,
   type InventoryItem,
   type Order,
@@ -23,6 +25,7 @@ import type {
 import type { SkuRepository } from "../sku/sku.repository.js";
 import {
   isOrderHeader,
+  orderVolumeFormula,
   type OrderRepository,
   type OrderSheetSnapshot,
 } from "./order.repository.js";
@@ -155,6 +158,41 @@ export class OrderService {
     private readonly inventoryRepository?: InventoryShipmentRepository,
   ) {}
 
+  async syncSkuPackingDetails(rawSku: string) {
+    const skuCode = skuCodeSchema.parse(rawSku);
+    const skuRecord = (await this.skuRepository.listSkus()).find(
+      (item) => item.sku === skuCode && !item.sku.startsWith("DELETED-"),
+    );
+    if (!skuRecord || skuRecord.quantityPerCarton <= 0) return 0;
+    const { rowNumber: _rowNumber, ...sku } = skuRecord;
+    const snapshot = await this.repository.snapshot();
+    const updates = snapshot.flatMap((sheet) => {
+      if (!isOrderHeader(sheet.rows[0] ?? [])) return [];
+      const dataRows = sheet.rows.flatMap((row, index) =>
+        index > 0 && row[13] ? [{ row, rowNumber: index + 1 }] : [],
+      );
+      if (
+        dataRows.length === 0 ||
+        dataRows.every(({ row }) => text(row[9]).toUpperCase() === "SHIPPED")
+      )
+        return [];
+      return dataRows.flatMap(({ row, rowNumber }) =>
+        text(row[0]).toUpperCase() === skuCode
+          ? [
+              {
+                title: sheet.title,
+                rowNumber,
+                totalQuantity: numeric(row[5], "T-QTY"),
+                sku,
+              },
+            ]
+          : [],
+      );
+    });
+    await this.repository.updateSkuPackingDetails(updates);
+    return updates.length;
+  }
+
   async create(input: unknown, idempotencyKey?: string) {
     if (idempotencyKey && this.completedRequests.has(idempotencyKey)) {
       return this.completedRequests.get(idempotencyKey)!;
@@ -188,17 +226,27 @@ export class OrderService {
           `SKU ${requested.sku} is not active`,
         );
       }
-      if (sku.quantityPerCarton <= 0) {
+      const hasCartonQuantity = sku.quantityPerCarton > 0;
+      if (!hasCartonQuantity && requested.totalQuantity === undefined)
         throw new AppError(
-          409,
-          "SKU_PACKING_DETAILS_REQUIRED",
-          `Add quantity per carton for ${sku.sku} in SKU Master before creating an order`,
+          400,
+          "TOTAL_QUANTITY_REQUIRED",
+          `Enter T-QTY for ${sku.sku} because Quantity / CTN is missing`,
         );
-      }
-      const totals = calculateOrderLineTotals({
-        ...sku,
-        cartons: requested.cartons,
-      });
+      const cartons = hasCartonQuantity
+        ? (requested.cartons ??
+          calculateCartonsFromTotalQuantity(
+            requested.totalQuantity!,
+            sku.quantityPerCarton,
+          ))
+        : 0;
+      const totals = hasCartonQuantity
+        ? calculateOrderLineTotals({ ...sku, cartons })
+        : {
+            totalQuantity: requested.totalQuantity!,
+            grossWeight: 0,
+            volume: 0,
+          };
       return stockLine(
         {
           orderLineId: `${orderId}-L${String(index + 1).padStart(3, "0")}`,
@@ -206,7 +254,7 @@ export class OrderService {
           itemDescription: sku.itemDescription,
           quantityPerCarton: sku.quantityPerCarton,
           unit: sku.unit,
-          cartons: requested.cartons,
+          cartons,
           ...totals,
           weightPerCarton: sku.weightPerCarton,
           length: sku.length,
@@ -232,11 +280,11 @@ export class OrderService {
           item.itemDescription,
           item.quantityPerCarton,
           item.unit,
-          item.cartons,
-          `=E${row}*C${row}`,
+          item.cartons || "",
+          item.quantityPerCarton > 0 ? `=E${row}*C${row}` : item.totalQuantity,
           item.weightPerCarton,
-          `=E${row}*G${row}`,
-          `=K${row}*L${row}*M${row}*E${row}/1000000`,
+          item.quantityPerCarton > 0 ? `=E${row}*G${row}` : "",
+          item.quantityPerCarton > 0 ? orderVolumeFormula(row) : "",
           displayStatuses[item.stockStatus],
           item.length,
           item.breadth,
@@ -536,14 +584,27 @@ export class OrderService {
           .at(-1) ?? null)
       : null;
     const items = dataRows.map((row) => {
-      const totals = calculateOrderLineTotals({
-        cartons: numeric(row[4], "NO OF CTNS"),
-        quantityPerCarton: numeric(row[2], "QUANTITY/CTN"),
-        weightPerCarton: numeric(row[6], "WEIGHT/CTN"),
-        length: numeric(row[10], "LENGTH"),
-        breadth: numeric(row[11], "BREADTH"),
-        height: numeric(row[12], "HEIGHT"),
-      });
+      const quantityPerCarton = numeric(row[2], "QUANTITY/CTN");
+      const cartons = numeric(row[4], "NO OF CTNS");
+      const weightPerCarton = numeric(row[6], "WEIGHT/CTN");
+      const length = numeric(row[10], "LENGTH");
+      const breadth = numeric(row[11], "BREADTH");
+      const height = numeric(row[12], "HEIGHT");
+      const totals =
+        quantityPerCarton > 0
+          ? calculateOrderLineTotals({
+              cartons,
+              quantityPerCarton,
+              weightPerCarton,
+              length,
+              breadth,
+              height,
+            })
+          : {
+              totalQuantity: numeric(row[5], "T-QTY"),
+              grossWeight: 0,
+              volume: 0,
+            };
       const sku = text(row[0]).toUpperCase();
       const orderId = text(row[13]);
       const orderLineId = text(row[14]);
@@ -552,14 +613,14 @@ export class OrderService {
           orderLineId,
           sku,
           itemDescription: text(row[1]),
-          quantityPerCarton: numeric(row[2], "QUANTITY/CTN"),
+          quantityPerCarton,
           unit: text(row[3]) as Sku["unit"],
-          cartons: numeric(row[4], "NO OF CTNS"),
+          cartons,
           ...totals,
-          weightPerCarton: numeric(row[6], "WEIGHT/CTN"),
-          length: numeric(row[10], "LENGTH"),
-          breadth: numeric(row[11], "BREADTH"),
-          height: numeric(row[12], "HEIGHT"),
+          weightPerCarton,
+          length,
+          breadth,
+          height,
           reservedQuantity:
             reservedByLine?.get(allocationKey(orderId, orderLineId)) ??
             numeric(row[17], "RESERVED QTY"),

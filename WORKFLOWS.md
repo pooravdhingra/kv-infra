@@ -6,7 +6,7 @@ Load one prioritized queue from current orders, supplier requests, packing sessi
 
 ## Create SKU
 
-Require the operator to choose Bajaj, TVS, Piaggio, or Other and enter an item description when creating a SKU. Packing quantity, weight, and dimensions are optional at creation and default to zero, while unit defaults to `pcs`; the operator can complete those details in SKU Master after measurement. Generate the next identifier in that OEM's independent `KV-BNNNNNN`, `KV-TNNNNNN`, `KV-PNNNNNN`, or `KV-XNNNNNN` sequence, append to `PACKING MASTER LIST`, then create a zero-valued `INVENTORY` row with the same identifier. Legacy SKU formats remain readable and unchanged but do not affect OEM sequences.
+Require the operator to choose Bajaj, TVS, Piaggio, or Other and enter an item description when creating a SKU. Store the description in uppercase. Packing quantity, weight, and dimensions are optional at creation and default to zero, while the available units are `pcs`, `set`, and `kit` and default to `pcs`; the operator can complete those details in SKU after measurement. Generate the next identifier in that OEM's independent `KV-BNNNN`, `KV-TNNNN`, `KV-PNNNN`, or `KV-XNNNN` sequence, expanding beyond four digits as needed, append to `PACKING MASTER LIST`, then create a zero-valued `INVENTORY` row with the same identifier. Legacy SKU formats remain readable and unchanged but do not affect OEM sequences.
 
 ## Delete SKU
 
@@ -14,7 +14,9 @@ After explicit operator confirmation, archive the matching Packing Master and In
 
 ## Create order and stock check
 
-Allow an operator to create a missing SKU without leaving the order form. This quick path requires OEM, item description, and quantity per carton so demand can be calculated; weight and dimensions default to zero for later editing on the SKU page.
+Allow an operator to create a missing SKU without leaving the order form. This quick path requires only OEM and item description; packing values default to zero for later editing. Quantity/CTN is always read-only on New Order. When it exists, Cartons and T-QTY are reciprocal: editing either recalculates the other. When it is missing, disable Cartons and accept T-QTY directly so customer demand can still be recorded.
+
+When finishing packing after the operator records Quantity/CTN and dimensional information, synchronize those SKU values into every matching pending order row. Derive cartons as `T-QTY / Quantity/CTN`, replace the direct T-QTY with its normal formula, and refresh gross weight and CBM formulas. Completed orders remain unchanged.
 
 Generate `ORD-YYYY-NNNN` and stable line IDs, create a collision-safe `Customer - DD Mon YYYY` order tab, copy SKU fields, and write visible formulas for quantity, gross weight, and CBM. Compare each line's required quantity with packed available and unpacked quantities. A refresh rewrites stock status, shortfall, and last-updated cells but never assigns stock.
 
@@ -30,13 +32,13 @@ Validate an active SKU, append `RECEIVING LOG`, and increase only `UNPACKED QTY`
 
 ## Start packing
 
-Atomically subtract the selected quantity from `UNPACKED QTY`, add it to `IN PACKING QTY`, and append an `IN PACKING` QA event. Reject insufficient or non-positive quantities and linked quantities above the exact line's remaining demand.
+Atomically subtract the selected quantity from `UNPACKED QTY`, add it to `IN PACKING QTY`, and append an `IN PACKING` QA event. Reject insufficient or non-positive quantities. A linked session may take more than the exact line's remaining demand.
 
 ## Finish packing / QA
 
 Offer a collapsible dimensional-information editor on every finish screen. Open it automatically when quantity per carton, weight, length, breadth, or height is zero, display those values as Missing, and let the operator save measurements to the SKU as part of finishing. Metadata completion is optional, although quantity per carton is inherently needed to record good complete cartons.
 
-Subtract the amount taken from `IN PACKING QTY`, add good complete cartons to `PACKED CTNS`, add defect and shortage quantities, and append a `FINISHED` QA event without editing the start event. Reject totals that do not reconcile or good quantities that are not complete cartons. Explicitly linked good stock is auto-assigned to that line, with an allocation row and order reserved-quantity update.
+Subtract the amount taken from `IN PACKING QTY`, return `LEFT UNPACKED` pieces to `UNPACKED QTY`, add good complete cartons to `PACKED CTNS`, add defect and shortage quantities, and append a `FINISHED` QA event without editing the start event. Reject totals that do not reconcile or good quantities that are not complete cartons. Explicitly linked good stock is auto-assigned only up to that line's remaining need; excess good stock remains general available inventory.
 
 ## Assign and cancel assignment
 

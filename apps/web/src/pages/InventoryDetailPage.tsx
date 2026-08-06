@@ -174,7 +174,11 @@ export const InventoryDetailPage = ({ sku }: { sku: string }) => {
             />
           </label>
           {message && <div className="notice">{message}</div>}
-          <button className="primary-button" disabled={saving}>
+          <button
+            className="primary-button"
+            aria-busy={saving}
+            disabled={saving}
+          >
             {saving ? "Saving…" : "Save adjustment"}
           </button>
         </form>

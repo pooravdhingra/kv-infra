@@ -20,9 +20,9 @@ type DimensionForm = Record<SkuPackingNumericField, string>;
 const dimensionFields: Array<[SkuPackingNumericField, string, string]> = [
   ["quantityPerCarton", "Quantity / CTN", ""],
   ["weightPerCarton", "Weight / CTN", "kg"],
-  ["length", "Length", "cm"],
-  ["breadth", "Breadth", "cm"],
-  ["height", "Height", "cm"],
+  ["length", "Length", "in"],
+  ["breadth", "Breadth", "in"],
+  ["height", "Height", "in"],
 ];
 
 const toDimensionForm = (sku: Sku): DimensionForm => ({
@@ -50,6 +50,7 @@ export const FinishPackingPage = ({ packingId }: { packingId: string }) => {
   const [packedCartons, setPackedCartons] = useState("");
   const [defective, setDefective] = useState("");
   const [short, setShort] = useState("");
+  const [leftUnpacked, setLeftUnpacked] = useState("");
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -79,9 +80,11 @@ export const FinishPackingPage = ({ packingId }: { packingId: string }) => {
   const packedCartonCount = Number(packedCartons || 0);
   const defectiveQuantity = Number(defective || 0);
   const shortQuantity = Number(short || 0);
+  const leftUnpackedQuantity = Number(leftUnpacked || 0);
   const quantityPerCarton = dimensionValue(dimensionForm.quantityPerCarton);
   const good = packedCartonCount * quantityPerCarton;
-  const accounted = good + defectiveQuantity + shortQuantity;
+  const accounted =
+    good + defectiveQuantity + shortQuantity + leftUnpackedQuantity;
   const unaccounted =
     Math.round((session.quantityTaken - accounted) * 1_000_000) / 1_000_000;
   const valid = unaccounted === 0 && Number.isInteger(packedCartonCount);
@@ -91,7 +94,7 @@ export const FinishPackingPage = ({ packingId }: { packingId: string }) => {
     event.preventDefault();
     if (!valid) {
       setMessage(
-        "Good, defective, and short quantities must exactly equal quantity taken.",
+        "Good, defective, short, and left unpacked quantities must exactly equal quantity taken.",
       );
       return;
     }
@@ -122,6 +125,7 @@ export const FinishPackingPage = ({ packingId }: { packingId: string }) => {
         packedCartons: packedCartonCount,
         defectiveQuantity,
         shortQuantity,
+        leftUnpackedQuantity,
         notes,
       });
       window.location.assign("/packing");
@@ -264,6 +268,18 @@ export const FinishPackingPage = ({ packingId }: { packingId: string }) => {
               onChange={(event) => setShort(event.target.value)}
             />
           </label>
+          <label>
+            Left unpacked
+            <input
+              type="number"
+              min="0"
+              step="any"
+              required
+              value={leftUnpacked}
+              placeholder="0"
+              onChange={(event) => setLeftUnpacked(event.target.value)}
+            />
+          </label>
         </div>
         <div className={`packing-reconciliation ${valid ? "is-valid" : ""}`}>
           <span>Quantity remaining to account for</span>
@@ -277,7 +293,11 @@ export const FinishPackingPage = ({ packingId }: { packingId: string }) => {
           />
         </label>
         {message && <div className="notice error-notice">{message}</div>}
-        <button className="primary-button" disabled={saving || !valid}>
+        <button
+          className="primary-button"
+          aria-busy={saving}
+          disabled={saving || !valid}
+        >
           {saving
             ? "Finishing…"
             : session.orderId

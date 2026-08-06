@@ -1,3 +1,5 @@
+import { CUBIC_INCH_TO_CUBIC_METRE } from "../constants/index.js";
+
 const round = (value: number) =>
   Math.round((value + Number.EPSILON) * 1_000_000) / 1_000_000;
 
@@ -25,9 +27,28 @@ export const calculateOrderLineTotals = (input: {
   totalQuantity: round(input.cartons * input.quantityPerCarton),
   grossWeight: round(input.cartons * input.weightPerCarton),
   volume: round(
-    (input.length * input.breadth * input.height * input.cartons) / 1_000_000,
+    input.length *
+      input.breadth *
+      input.height *
+      input.cartons *
+      CUBIC_INCH_TO_CUBIC_METRE,
   ),
 });
+
+export const calculateCartonsFromTotalQuantity = (
+  totalQuantity: number,
+  quantityPerCarton: number,
+) => {
+  if (totalQuantity < 0)
+    throw new RangeError("Total quantity cannot be negative");
+  if (quantityPerCarton <= 0)
+    throw new RangeError("Quantity per carton must be positive");
+  return (
+    Math.round(
+      (totalQuantity / quantityPerCarton + Number.EPSILON) * 1_000_000_000_000,
+    ) / 1_000_000_000_000
+  );
+};
 
 export const shipInventoryTransition = (input: {
   quantityPerCarton: number;
@@ -147,6 +168,7 @@ export const startPackingTransition = (input: {
 
 export const finishPackingTransition = (input: {
   quantityPerCarton: number;
+  unpackedQuantity: number;
   inPackingQuantity: number;
   packedCartons: number;
   defectiveShortQuantity: number;
@@ -155,9 +177,13 @@ export const finishPackingTransition = (input: {
   finishedCartons: number;
   defectiveQuantity: number;
   shortQuantity: number;
+  leftUnpackedQuantity: number;
 }) => {
   const accounted = round(
-    input.goodQuantity + input.defectiveQuantity + input.shortQuantity,
+    input.goodQuantity +
+      input.defectiveQuantity +
+      input.shortQuantity +
+      input.leftUnpackedQuantity,
   );
   if (accounted !== round(input.quantityTaken))
     throw new RangeError("Packing outcome does not reconcile");
@@ -169,6 +195,9 @@ export const finishPackingTransition = (input: {
   if (input.quantityTaken > input.inPackingQuantity)
     throw new RangeError("Packing session exceeds in-packing stock");
   return {
+    unpackedQuantity: round(
+      input.unpackedQuantity + input.leftUnpackedQuantity,
+    ),
     inPackingQuantity: round(input.inPackingQuantity - input.quantityTaken),
     packedCartons: round(input.packedCartons + input.finishedCartons),
     defectiveShortQuantity: round(

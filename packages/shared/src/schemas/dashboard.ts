@@ -14,6 +14,7 @@ export const dashboardOrderSchema = z.object({
   dateReceived: z.string().date(),
   lineCount: z.number().int().positive(),
   totalCartons: z.number().nonnegative(),
+  hasMissingCartons: z.boolean(),
   totalQuantity: z.number().nonnegative(),
   readiness: z.enum([
     "READY_TO_SHIP",

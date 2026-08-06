@@ -39,6 +39,7 @@ export type PackingEvent = {
   packedCartons: number;
   defectiveQuantity: number;
   shortQuantity: number;
+  leftUnpackedQuantity: number;
   assignedToOrder: boolean;
   orderId: string | null;
   orderLineId: string | null;
@@ -107,6 +108,7 @@ export class GoogleSheetsPackingRepository implements PackingRepository {
           packedCartons: numeric(row[6], "PACKED CTNS"),
           defectiveQuantity: numeric(row[7], "DEFECTIVE QTY"),
           shortQuantity: numeric(row[8], "SHORT QTY"),
+          leftUnpackedQuantity: numeric(row[14], "LEFT UNPACKED"),
           assignedToOrder: text(row[9]).toUpperCase() === "YES",
           orderId: text(row[10]) || null,
           orderLineId: text(row[11]) || null,

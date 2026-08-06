@@ -59,7 +59,7 @@ RECEIPT ID	DATE	SKU	ITEM DESCRIPTION	QTY RECEIVED	UNIT	SUPPLIER	WAREHOUSE LOCATI
 ### `QA LOG`
 
 ```text
-PACKING ID	DATE	SKU	ITEM DESCRIPTION	QTY TAKEN FOR PACKING	GOOD QTY	PACKED CTNS	DEFECTIVE QTY	SHORT QTY	ASSIGNED TO ORDER?	ORDER ID	ORDER LINE ID	STATUS	NOTES
+PACKING ID	DATE	SKU	ITEM DESCRIPTION	QTY TAKEN FOR PACKING	GOOD QTY	PACKED CTNS	DEFECTIVE QTY	SHORT QTY	ASSIGNED TO ORDER?	ORDER ID	ORDER LINE ID	STATUS	NOTES	LEFT UNPACKED
 ```
 
 If upgrading the earlier 12-column QA tab, insert two columns immediately before `NOTES`, name them `ORDER LINE ID` and `STATUS`, and leave `NOTES` as the final column. Set `STATUS` to `FINISHED` for any historical completed QA rows. Do not overwrite or delete existing QA rows.
@@ -128,6 +128,10 @@ QA_LOG_SHEET_NAME=QA LOG
 ORDER_ALLOCATIONS_SHEET_NAME=ORDER ALLOCATIONS
 SUPPLIER_REQUESTS_SHEET_NAME=SUPPLIER REQUESTS
 WHATSAPP_LOG_SHEET_NAME=WHATSAPP LOG
+GOOGLE_SHEETS_TIMEOUT_MS=10000
+GOOGLE_SHEETS_RETRY_ATTEMPTS=4
+GOOGLE_SHEETS_RETRY_BASE_DELAY_MS=500
+GOOGLE_SHEETS_READ_CACHE_MS=15000
 
 BAILEYS_AUTH_DIR=.secrets/baileys-auth
 WHATSAPP_DEFAULT_COUNTRY_CODE=91
@@ -140,6 +144,8 @@ TOKEN_ENCRYPTION_KEY=second-generated-random-value
 ```
 
 Keep the default sheet names unless the actual tabs intentionally use different names. Header names remain fixed regardless of tab-name configuration.
+
+The Sheets defaults coalesce and cache reads for 15 seconds, invalidate data after every application write, and retry transient failures up to four times. Keep these defaults for normal operation. Increase `GOOGLE_SHEETS_READ_CACHE_MS` to `30000` if the operator can tolerate up to 30 seconds before manual spreadsheet edits appear in the app and quota pressure remains high.
 
 `BAILEYS_AUTH_DIR` contains WhatsApp linked-device credentials. Keep it inside `.secrets`, never commit or share it, and restrict access to the operator machine. `WHATSAPP_DEFAULT_COUNTRY_CODE` supplies the country code for local ten-digit Supplier Master numbers (`91` for India); numbers already containing a country code are left intact. `OPERATOR_TIME_ZONE` controls the same-calendar-day duplicate follow-up guard. The scheduler checks hourly by default and sends only while WhatsApp is connected.
 
@@ -179,7 +185,7 @@ Create a fake SKU:
 ```bash
 curl --fail --silent \
   -H 'Content-Type: application/json' \
-  -d '{"oem":"Bajaj","itemDescription":"Test carton","quantityPerCarton":100,"unit":"pcs","weightPerCarton":10,"length":50,"breadth":40,"height":30}' \
+  -d '{"oem":"Bajaj","itemDescription":"Test carton","quantityPerCarton":100,"unit":"pcs","weightPerCarton":10,"length":20,"breadth":16,"height":12}' \
   http://localhost:4000/api/skus
 ```
 

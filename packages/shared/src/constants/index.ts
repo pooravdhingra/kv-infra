@@ -8,8 +8,9 @@ export const SUPPLIER_REQUEST_STATUSES = [
   "RECEIVED",
 ] as const;
 
-export const DIMENSION_UNIT = "cm" as const;
+export const DIMENSION_UNIT = "in" as const;
 export const VOLUME_UNIT = "m3" as const;
+export const CUBIC_INCH_TO_CUBIC_METRE = 0.000016387064;
 
 export const PACKING_MASTER_HEADERS = [
   "SKU",
@@ -106,6 +107,7 @@ export const QA_LOG_HEADERS = [
   "ORDER LINE ID",
   "STATUS",
   "NOTES",
+  "LEFT UNPACKED",
 ] as const;
 
 export const ORDER_ALLOCATION_HEADERS = [

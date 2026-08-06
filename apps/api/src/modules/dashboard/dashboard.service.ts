@@ -238,6 +238,9 @@ export class DashboardService {
           dateReceived: order.dateReceived,
           lineCount: order.items.length,
           totalCartons: order.totalCartons,
+          hasMissingCartons: order.items.some(
+            (item) => item.quantityPerCarton <= 0,
+          ),
           totalQuantity: order.totalQuantity,
           readiness: orderReadiness(order),
         })),

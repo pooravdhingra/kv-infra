@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { skuOems, skuUnits, type Sku, type SkuOem } from "@kv-infra/shared";
+import {
+  skuCreationUnits,
+  skuOems,
+  type Sku,
+  type SkuOem,
+} from "@kv-infra/shared";
 
 import {
   apiErrorMessage,
@@ -29,9 +34,9 @@ const emptySku: SkuForm = {
 const numberFields = [
   ["quantityPerCarton", "Quantity / CTN"],
   ["weightPerCarton", "Weight / CTN (kg)"],
-  ["length", "Length (cm)"],
-  ["breadth", "Breadth (cm)"],
-  ["height", "Height (cm)"],
+  ["length", "Length (in)"],
+  ["breadth", "Breadth (in)"],
+  ["height", "Height (in)"],
 ] as const;
 
 const skuToForm = (sku: Sku): SkuForm => ({
@@ -54,7 +59,8 @@ export const SkuMasterPage = () => {
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingAction, setSavingAction] = useState<"save" | "delete" | "">("");
+  const saving = Boolean(savingAction);
   const [formCollapsed, setFormCollapsed] = useState(false);
   const requestedSku = useRef(
     new URLSearchParams(window.location.search).get("sku")?.toUpperCase() ?? "",
@@ -88,7 +94,7 @@ export const SkuMasterPage = () => {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    setSaving(true);
+    setSavingAction("save");
     setMessage("");
     try {
       const details = {
@@ -105,7 +111,11 @@ export const SkuMasterPage = () => {
         await updateSku(form.sku, details);
         setMessage(`${form.sku} updated.`);
       } else {
-        const created = await createSku({ ...details, oem });
+        const created = await createSku({
+          ...details,
+          unit: form.unit as (typeof skuCreationUnits)[number],
+          oem,
+        });
         setMessage(`${created.sku} created with its inventory row.`);
       }
       setForm(emptySku);
@@ -115,7 +125,7 @@ export const SkuMasterPage = () => {
     } catch (error) {
       setMessage(apiErrorMessage(error));
     } finally {
-      setSaving(false);
+      setSavingAction("");
     }
   };
 
@@ -133,7 +143,7 @@ export const SkuMasterPage = () => {
     );
     if (!confirmed) return;
 
-    setSaving(true);
+    setSavingAction("delete");
     setMessage("");
     try {
       await deleteSku(sku);
@@ -144,7 +154,7 @@ export const SkuMasterPage = () => {
     } catch (error) {
       setMessage(apiErrorMessage(error));
     } finally {
-      setSaving(false);
+      setSavingAction("");
     }
   };
 
@@ -188,9 +198,9 @@ export const SkuMasterPage = () => {
                   <span>{displayPackingValue(sku.quantityPerCarton)}</span>
                   <span>{sku.unit}</span>
                   <span>{displayPackingValue(sku.weightPerCarton, " kg")}</span>
-                  <span>{displayPackingValue(sku.length, " cm")}</span>
-                  <span>{displayPackingValue(sku.breadth, " cm")}</span>
-                  <span>{displayPackingValue(sku.height, " cm")}</span>
+                  <span>{displayPackingValue(sku.length, " in")}</span>
+                  <span>{displayPackingValue(sku.breadth, " in")}</span>
+                  <span>{displayPackingValue(sku.height, " in")}</span>
                   <button
                     className="text-button"
                     onClick={() => {
@@ -276,7 +286,11 @@ export const SkuMasterPage = () => {
                   setForm({ ...form, unit: event.target.value as Sku["unit"] })
                 }
               >
-                {skuUnits.map((unit) => (
+                {editing &&
+                  !skuCreationUnits.some((unit) => unit === form.unit) && (
+                    <option>{form.unit}</option>
+                  )}
+                {skuCreationUnits.map((unit) => (
                   <option key={unit}>{unit}</option>
                 ))}
               </select>
@@ -305,13 +319,18 @@ export const SkuMasterPage = () => {
             </div>
             {message && <div className="notice">{message}</div>}
             <div className="sku-form-actions">
-              <button className="primary-button" disabled={saving}>
+              <button
+                className="primary-button"
+                aria-busy={savingAction === "save"}
+                disabled={saving}
+              >
                 {saving ? "Saving…" : editing ? "Save changes" : "Save SKU"}
               </button>
               {editing && (
                 <button
                   type="button"
                   className="danger-button"
+                  aria-busy={savingAction === "delete"}
                   disabled={saving}
                   onClick={remove}
                 >

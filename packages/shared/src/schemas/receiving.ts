@@ -10,7 +10,12 @@ export const createReceiptRequestSchema = z
     quantityReceived: z.number().positive().max(1_000_000_000),
     supplier: z.string().trim().min(1).max(120),
     warehouseLocation: z.string().trim().max(120).default(""),
-    receivedBy: z.string().trim().min(2).max(120),
+    receivedBy: z
+      .string()
+      .trim()
+      .min(2)
+      .max(120)
+      .transform((value) => value.toUpperCase()),
     notes: z.string().trim().max(1000).default(""),
     orderId: z.string().trim().optional(),
     orderLineId: z.string().trim().optional(),

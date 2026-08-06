@@ -9,21 +9,26 @@
 - Dashboard recommendations prioritize failed sends, due follow-ups, active packing, and actionable order states from live workflow data.
 - Dashboard recommendations include incomplete SKUs whose carton quantity, weight, or dimensions contain zero values.
 - Exact Sheets headers pass and mismatched headers fail before writes.
-- SKU creation requires an OEM, assigns the next independent `KV-BNNNNNN`, `KV-TNNNNNN`, `KV-PNNNNNN`, or `KV-XNNNNNN` identifier, and adds both master and inventory records.
+- Google Sheets timeouts retry with bounded exponential backoff, while non-transient contract errors fail immediately.
+- Same-workbook reads batch into one request, duplicate reads share in-flight work, cached reads avoid repeat requests, and writes invalidate cached row data.
+- Operator-triggered Sheets buttons show an inline busy spinner; initial table loads do not introduce page-wide spinners.
+- SKU creation requires an OEM, assigns the next independent four-digit-minimum `KV-BNNNN`, `KV-TNNNN`, `KV-PNNNN`, or `KV-XNNNN` identifier, uppercases its description, and adds both master and inventory records.
 - SKU creation accepts OEM and item description alone, defaulting packing quantity, weight, and dimensions to zero and unit to `pcs`.
 - Legacy and other-OEM SKU names do not affect the selected OEM sequence.
-- Generated identifiers continue safely beyond six digits.
+- Generated identifiers expand safely beyond four digits.
 - SKU deletion archives matching master/inventory identities, hides the SKU from active results, and does not allow its generated identifier to be reused.
 - Inventory totals are derived from carton size, packed cartons, and assigned quantity; unpacked stock is excluded from available.
 - Manual adjustments reject negative buckets and assignments above packed total, then append an audit note.
-- Order creation calculates total quantity, gross kilograms, and CBM; generates the next yearly order ID; and writes formulas to the order tab.
+- Order creation calculates total quantity, gross kilograms, and CBM from inch dimensions; generates the next yearly order ID; and writes inch-to-CBM formulas to the order tab.
+- New-order quantity entry keeps Quantity/CTN read-only, derives T-QTY from Cartons or Cartons from T-QTY when carton quantity exists, and accepts direct T-QTY with Cartons disabled when it does not.
+- Finishing packing after carton metadata is recorded backfills matching pending order rows with SKU values, derived carton counts, and normal formulas without rewriting completed orders.
 - Stock checks distinguish ready-to-reserve, needs-packing, and needs-supplier states.
 - Suggested actions prioritize sufficient packed stock, active supplier requests, sufficient unpacked stock, and supplier shortfalls in that order.
 - Receiving increases only unpacked stock and general receipts never alter order/request state.
 - Packing start conserves quantity across unpacked and in-packing buckets and rejects overdraw.
-- Packing finish requires exact QA reconciliation and complete cartons, then appends a separate finished event.
+- Packing finish requires exact QA reconciliation including left-unpacked pieces, returns those pieces to unpacked stock, and appends a separate finished event.
 - Zero-valued SKU packing fields are treated as Missing, and the shared completeness check identifies every missing field.
-- Linked packing assigns only good stock to the exact order line and appends an allocation.
+- Linked packing may take more than the order need, assigns good stock only up to the exact line's remaining requirement, and leaves excess packed stock generally available.
 - Receiving order lookup batch-reads order tabs and fires only after a complete SKU selection.
 - Multi-tab reads associate returned values by sheet name, including when an earlier tab is empty and omitted from Google's response.
 - Supplier Master is read through a one-minute cache and suppliers are priority sorted.

@@ -38,7 +38,7 @@ import axios, { AxiosError } from "axios";
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "/api",
-  timeout: 10_000,
+  timeout: 60_000,
 });
 
 export const apiErrorMessage = (error: unknown) => {

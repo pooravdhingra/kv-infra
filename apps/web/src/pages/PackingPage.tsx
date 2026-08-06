@@ -74,7 +74,7 @@ export const PackingPage = () => {
               </div>
             )}
           </div>
-          <div className="section-heading orders-heading">
+          <div className="section-heading orders-heading packing-unpacked-heading">
             <h2>Unpacked stock available</h2>
             <span>{data.unpackedInventory.length} SKUs</span>
           </div>

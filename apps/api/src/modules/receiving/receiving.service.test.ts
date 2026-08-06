@@ -63,6 +63,8 @@ describe("ReceivingService", () => {
 
     expect(result.receiptId).toBe("REC-2026-0005");
     expect(result.itemCheckStatus).toBe("UNCHECKED");
+    expect(result.receivedBy).toBe("OPERATOR");
+    expect(repository.savedRow[8]).toBe("OPERATOR");
     expect(repository.savedInventory).toMatchObject({
       unpackedQuantity: 50,
       inPackingQuantity: 0,

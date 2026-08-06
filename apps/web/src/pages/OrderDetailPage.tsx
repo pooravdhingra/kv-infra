@@ -21,7 +21,7 @@ const statusLabel = {
   READY_TO_RESERVE: "Ready to reserve",
   NEEDS_PACKING: "Needs packing",
   NEEDS_SUPPLIER: "Needs supplier",
-  FULLY_RESERVED: "Fully reserved",
+  FULLY_RESERVED: "Ready",
 } as const;
 
 const actionLabel: Record<OrderAction, string> = {
@@ -30,7 +30,7 @@ const actionLabel: Record<OrderAction, string> = {
   REQUEST_SUPPLIER: "Request supplier",
   MARK_RECEIVED: "Mark received",
   RECEIVE_MATERIAL: "Receive material",
-  NO_ACTION: "Fully reserved",
+  NO_ACTION: "Ready",
 };
 
 const actionHref = (action: OrderAction, orderId: string, line: OrderLine) => {
@@ -185,6 +185,7 @@ export const OrderDetailPage = ({ orderId }: { orderId: string }) => {
               ) && (
                 <button
                   className="primary-button"
+                  aria-busy={mutating === "ship-order"}
                   disabled={Boolean(mutating)}
                   onClick={() => void ship()}
                 >
@@ -210,7 +211,11 @@ export const OrderDetailPage = ({ orderId }: { orderId: string }) => {
         </div>
         <div>
           <span>Cartons</span>
-          <strong>{order.totalCartons}</strong>
+          <strong>
+            {order.items.some((item) => item.quantityPerCarton <= 0)
+              ? "Missing"
+              : order.totalCartons}
+          </strong>
         </div>
         <div>
           <span>Total quantity</span>
@@ -219,7 +224,10 @@ export const OrderDetailPage = ({ orderId }: { orderId: string }) => {
         <div>
           <span>Gross weight</span>
           <strong>
-            {order.items.some((item) => item.weightPerCarton <= 0)
+            {order.items.some(
+              (item) =>
+                item.quantityPerCarton <= 0 || item.weightPerCarton <= 0,
+            )
               ? "Missing"
               : `${order.grossWeight} kg`}
           </strong>
@@ -229,7 +237,10 @@ export const OrderDetailPage = ({ orderId }: { orderId: string }) => {
           <strong>
             {order.items.some(
               (item) =>
-                item.length <= 0 || item.breadth <= 0 || item.height <= 0,
+                item.quantityPerCarton <= 0 ||
+                item.length <= 0 ||
+                item.breadth <= 0 ||
+                item.height <= 0,
             )
               ? "Missing"
               : `${formatDecimal(order.volume)} CBM`}
@@ -242,6 +253,7 @@ export const OrderDetailPage = ({ orderId }: { orderId: string }) => {
         {order.status === "PENDING" && (
           <button
             className="secondary-button"
+            aria-busy={checking}
             disabled={checking}
             onClick={checkStock}
           >
@@ -332,6 +344,7 @@ export const OrderDetailPage = ({ orderId }: { orderId: string }) => {
                   />
                   <button
                     className="primary-button compact-action"
+                    aria-busy={mutating === line.orderLineId}
                     disabled={
                       Boolean(mutating) ||
                       (allocationDrafts[line.orderLineId] ?? 1) <= 0
@@ -378,6 +391,7 @@ export const OrderDetailPage = ({ orderId }: { orderId: string }) => {
               {!allocation.cancelled && order.status === "PENDING" && (
                 <button
                   className="text-button danger-text"
+                  aria-busy={mutating === allocation.allocationId}
                   disabled={Boolean(mutating)}
                   onClick={() => void cancel(allocation)}
                 >

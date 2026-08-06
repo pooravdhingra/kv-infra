@@ -1,4 +1,10 @@
-import { ORDER_HEADERS, type OrderLine } from "@kv-infra/shared";
+import {
+  CUBIC_INCH_TO_CUBIC_METRE,
+  ORDER_HEADERS,
+  calculateCartonsFromTotalQuantity,
+  type OrderLine,
+  type Sku,
+} from "@kv-infra/shared";
 
 import { env } from "../../config/env.js";
 import { AppError } from "../../lib/app-error.js";
@@ -10,6 +16,13 @@ export type OrderSheetSnapshot = {
   rows: unknown[][];
 };
 
+export type OrderSkuPackingUpdate = {
+  title: string;
+  rowNumber: number;
+  totalQuantity: number;
+  sku: Sku;
+};
+
 export interface OrderRepository {
   snapshot(): Promise<OrderSheetSnapshot[]>;
   create(
@@ -17,6 +30,7 @@ export interface OrderRepository {
     values: unknown[][],
   ): Promise<{ sheetId: number; title: string }>;
   updateStockCheck(title: string, items: OrderLine[]): Promise<void>;
+  updateSkuPackingDetails(updates: OrderSkuPackingUpdate[]): Promise<void>;
   completeOrder(
     title: string,
     lineCount: number,
@@ -47,6 +61,9 @@ const spreadsheetId = () => {
 export const isOrderHeader = (row: unknown[]) =>
   row.length === ORDER_HEADERS.length &&
   row.every((value, index) => String(value) === ORDER_HEADERS[index]);
+
+export const orderVolumeFormula = (row: number) =>
+  `=K${row}*L${row}*M${row}*E${row}*${CUBIC_INCH_TO_CUBIC_METRE}`;
 
 export class GoogleSheetsOrderRepository implements OrderRepository {
   constructor(private readonly sheets: GoogleSheetsClient) {}
@@ -90,6 +107,12 @@ export class GoogleSheetsOrderRepository implements OrderRepository {
             ? "FULLY RESERVED"
             : item.stockStatus.replaceAll("_", " ");
         return [
+          {
+            range: `'${escaped}'!I${row}`,
+            values: [
+              [item.quantityPerCarton > 0 ? orderVolumeFormula(row) : ""],
+            ],
+          },
           { range: `'${escaped}'!J${row}`, values: [[status]] },
           {
             range: `'${escaped}'!R${row}`,
@@ -100,6 +123,47 @@ export class GoogleSheetsOrderRepository implements OrderRepository {
             values: [[item.shortfallQuantity]],
           },
           { range: `'${escaped}'!U${row}`, values: [[timestamp]] },
+        ];
+      }),
+    );
+  }
+
+  async updateSkuPackingDetails(updates: OrderSkuPackingUpdate[]) {
+    if (updates.length === 0) return;
+    const timestamp = new Date().toISOString();
+    await this.sheets.batchUpdateRanges(
+      spreadsheetId(),
+      updates.flatMap(({ title, rowNumber, totalQuantity, sku }) => {
+        const escaped = title.replaceAll("'", "''");
+        const cartons = calculateCartonsFromTotalQuantity(
+          totalQuantity,
+          sku.quantityPerCarton,
+        );
+        return [
+          {
+            range: `'${escaped}'!C${rowNumber}`,
+            values: [[sku.quantityPerCarton]],
+          },
+          {
+            range: `'${escaped}'!E${rowNumber}:I${rowNumber}`,
+            values: [
+              [
+                cartons,
+                `=E${rowNumber}*C${rowNumber}`,
+                sku.weightPerCarton,
+                `=E${rowNumber}*G${rowNumber}`,
+                orderVolumeFormula(rowNumber),
+              ],
+            ],
+          },
+          {
+            range: `'${escaped}'!K${rowNumber}:M${rowNumber}`,
+            values: [[sku.length, sku.breadth, sku.height]],
+          },
+          {
+            range: `'${escaped}'!U${rowNumber}`,
+            values: [[timestamp]],
+          },
         ];
       }),
     );

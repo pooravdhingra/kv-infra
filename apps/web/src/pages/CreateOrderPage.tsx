@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
+  calculateCartonsFromTotalQuantity,
   calculateOrderLineTotals,
   skuOems,
   type CreateOrderRequest,
@@ -15,7 +16,33 @@ import {
 } from "../api/client";
 import { formatDecimal } from "../lib/format-number";
 
-type DraftLine = { sku: string; skuQuery: string; cartons: number };
+type DraftQuantity = number | "";
+type DraftLine = {
+  sku: string;
+  skuQuery: string;
+  cartons: DraftQuantity;
+  totalQuantity: DraftQuantity;
+};
+
+const emptyLine = (): DraftLine => ({
+  sku: "",
+  skuQuery: "",
+  cartons: 1,
+  totalQuantity: "",
+});
+
+const positiveNumber = (value: DraftQuantity): value is number =>
+  typeof value === "number" && Number.isFinite(value) && value > 0;
+
+const calculateDraftTotal = (cartons: number, quantityPerCarton: number) =>
+  calculateOrderLineTotals({
+    cartons,
+    quantityPerCarton,
+    weightPerCarton: 0,
+    length: 0,
+    breadth: 0,
+    height: 0,
+  }).totalQuantity;
 
 const skuLabel = (sku: Sku) => `${sku.sku} — ${sku.itemDescription}`;
 
@@ -57,9 +84,7 @@ export const CreateOrderPage = () => {
   const [customerName, setCustomerName] = useState("");
   const [dateReceived, setDateReceived] = useState(localDate);
   const [orderNotes, setOrderNotes] = useState("");
-  const [lines, setLines] = useState<DraftLine[]>([
-    { sku: "", skuQuery: "", cartons: 1 },
-  ]);
+  const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
   const [activeSkuLine, setActiveSkuLine] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -72,11 +97,6 @@ export const CreateOrderPage = () => {
   >("");
   const [creatingSku, setCreatingSku] = useState(false);
   const [newSkuMessage, setNewSkuMessage] = useState("");
-  const newSkuQuantityIsValid =
-    typeof newSkuQuantityPerCarton === "number" &&
-    Number.isFinite(newSkuQuantityPerCarton) &&
-    newSkuQuantityPerCarton > 0;
-
   useEffect(() => {
     void listSkus()
       .then(setSkus)
@@ -87,20 +107,28 @@ export const CreateOrderPage = () => {
     () =>
       lines.map((line) => {
         const sku = skus.find((candidate) => candidate.sku === line.sku);
-        return sku
-          ? {
-              ...line,
-              skuDetails: sku,
-              ...calculateOrderLineTotals({ ...sku, cartons: line.cartons }),
-            }
-          : null;
+        if (!sku) return null;
+        const cartons = positiveNumber(line.cartons) ? line.cartons : 0;
+        const calculated = calculateOrderLineTotals({ ...sku, cartons });
+        return {
+          ...line,
+          skuDetails: sku,
+          ...calculated,
+          totalQuantity:
+            sku.quantityPerCarton > 0
+              ? calculated.totalQuantity
+              : positiveNumber(line.totalQuantity)
+                ? line.totalQuantity
+                : 0,
+        };
       }),
     [lines, skus],
   );
 
   const totals = preview.reduce(
     (sum, line) => ({
-      cartons: sum.cartons + (line?.cartons ?? 0),
+      cartons:
+        sum.cartons + (line && positiveNumber(line.cartons) ? line.cartons : 0),
       quantity: sum.quantity + (line?.totalQuantity ?? 0),
       weight: sum.weight + (line?.grossWeight ?? 0),
       volume: sum.volume + (line?.volume ?? 0),
@@ -108,12 +136,16 @@ export const CreateOrderPage = () => {
     { cartons: 0, quantity: 0, weight: 0, volume: 0 },
   );
   const hasMissingWeight = preview.some(
-    (line) => line && line.skuDetails.weightPerCarton <= 0,
+    (line) =>
+      line &&
+      (line.skuDetails.quantityPerCarton <= 0 ||
+        line.skuDetails.weightPerCarton <= 0),
   );
   const hasMissingVolume = preview.some(
     (line) =>
       line &&
       (line.skuDetails.length <= 0 ||
+        line.skuDetails.quantityPerCarton <= 0 ||
         line.skuDetails.breadth <= 0 ||
         line.skuDetails.height <= 0),
   );
@@ -125,15 +157,32 @@ export const CreateOrderPage = () => {
       ),
     );
 
+  const selectSku = (index: number, sku: Sku) => {
+    setLines((current) =>
+      current.map((line, lineIndex) => {
+        if (lineIndex !== index) return line;
+        const cartons = sku.quantityPerCarton > 0 ? 1 : "";
+        return {
+          ...line,
+          sku: sku.sku,
+          skuQuery: skuLabel(sku),
+          cartons,
+          totalQuantity:
+            cartons === ""
+              ? ""
+              : calculateDraftTotal(cartons, sku.quantityPerCarton),
+        };
+      }),
+    );
+    setActiveSkuLine(null);
+  };
+
   const openNewSku = () => {
     let target =
       activeSkuLine ?? lines.findIndex((line) => line.sku.length === 0);
     if (target < 0) {
       target = lines.length;
-      setLines((current) => [
-        ...current,
-        { sku: "", skuQuery: "", cartons: 1 },
-      ]);
+      setLines((current) => [...current, emptyLine()]);
     }
     setNewSkuTargetLine(target);
     setNewSkuDescription(lines[target]?.skuQuery.trim() ?? "");
@@ -144,13 +193,8 @@ export const CreateOrderPage = () => {
 
   const addNewSku = async () => {
     const description = newSkuDescription.trim();
-    if (
-      !description ||
-      typeof newSkuQuantityPerCarton !== "number" ||
-      !Number.isFinite(newSkuQuantityPerCarton) ||
-      newSkuQuantityPerCarton <= 0
-    ) {
-      setNewSkuMessage("Enter an item description and quantity per carton.");
+    if (!description) {
+      setNewSkuMessage("Enter an item description.");
       return;
     }
     setCreatingSku(true);
@@ -159,15 +203,26 @@ export const CreateOrderPage = () => {
       const created = await createSku({
         oem: newSkuOem,
         itemDescription: description,
-        quantityPerCarton: newSkuQuantityPerCarton,
+        ...(positiveNumber(newSkuQuantityPerCarton)
+          ? { quantityPerCarton: newSkuQuantityPerCarton }
+          : {}),
       });
       setSkus((items) => [...items, created]);
       setLines((current) =>
-        current.map((line, index) =>
-          index === newSkuTargetLine
-            ? { ...line, sku: created.sku, skuQuery: skuLabel(created) }
-            : line,
-        ),
+        current.map((line, index) => {
+          if (index !== newSkuTargetLine) return line;
+          const cartons = created.quantityPerCarton > 0 ? 1 : "";
+          return {
+            ...line,
+            sku: created.sku,
+            skuQuery: skuLabel(created),
+            cartons,
+            totalQuantity:
+              cartons === ""
+                ? ""
+                : calculateDraftTotal(cartons, created.quantityPerCarton),
+          };
+        }),
       );
       setShowNewSku(false);
       setNewSkuOem("Bajaj");
@@ -188,6 +243,18 @@ export const CreateOrderPage = () => {
       );
       return;
     }
+    const incompleteLine = lines.find((line) => {
+      const sku = skus.find((item) => item.sku === line.sku);
+      return sku?.quantityPerCarton
+        ? !positiveNumber(line.cartons)
+        : !positiveNumber(line.totalQuantity);
+    });
+    if (incompleteLine) {
+      setMessage(
+        "Enter cartons or T-QTY for every item before creating the order.",
+      );
+      return;
+    }
     setSaving(true);
     setMessage("");
     try {
@@ -195,7 +262,12 @@ export const CreateOrderPage = () => {
         customerName,
         dateReceived,
         orderNotes,
-        items: lines.map(({ sku, cartons }) => ({ sku, cartons })),
+        items: lines.map((line) => {
+          const sku = skus.find((item) => item.sku === line.sku)!;
+          return sku.quantityPerCarton > 0
+            ? { sku: line.sku, cartons: Number(line.cartons) }
+            : { sku: line.sku, totalQuantity: Number(line.totalQuantity) };
+        }),
       };
       const order = await createOrder(input);
       window.location.assign(`/orders/${encodeURIComponent(order.orderId)}`);
@@ -259,9 +331,7 @@ export const CreateOrderPage = () => {
               type="button"
               className="secondary-button"
               disabled={skus.length === 0}
-              onClick={() =>
-                setLines([...lines, { sku: "", skuQuery: "", cartons: 1 }])
-              }
+              onClick={() => setLines([...lines, emptyLine()])}
             >
               + Add item
             </button>
@@ -296,12 +366,12 @@ export const CreateOrderPage = () => {
                 />
               </label>
               <label>
-                Quantity / CTN
+                Quantity / CTN (optional)
                 <input
                   type="number"
                   min="0.000001"
                   step="any"
-                  placeholder="Required for order quantity"
+                  placeholder="Can be entered in the order row"
                   value={newSkuQuantityPerCarton}
                   onChange={(event) =>
                     setNewSkuQuantityPerCarton(
@@ -319,18 +389,15 @@ export const CreateOrderPage = () => {
             <button
               type="button"
               className="secondary-button"
-              disabled={
-                creatingSku ||
-                !newSkuDescription.trim() ||
-                !newSkuQuantityIsValid
-              }
+              aria-busy={creatingSku}
+              disabled={creatingSku || !newSkuDescription.trim()}
               onClick={() => void addNewSku()}
             >
               {creatingSku ? "Creating…" : "Create and select SKU"}
             </button>
             <small>
-              Weight and dimensions will start at zero and can be added later
-              from the SKU page.
+              Quantity / CTN can be entered in the order row. Weight and
+              dimensions can be added later from the SKU page.
             </small>
           </div>
         )}
@@ -370,6 +437,8 @@ export const CreateOrderPage = () => {
                       updateLine(index, {
                         sku: "",
                         skuQuery: event.target.value,
+                        cartons: 1,
+                        totalQuantity: "",
                       });
                       setActiveSkuLine(index);
                     }}
@@ -378,13 +447,7 @@ export const CreateOrderPage = () => {
                       if (event.key === "Enter" && activeSkuLine === index) {
                         event.preventDefault();
                         const firstMatch = matches[0];
-                        if (firstMatch) {
-                          updateLine(index, {
-                            sku: firstMatch.sku,
-                            skuQuery: skuLabel(firstMatch),
-                          });
-                          setActiveSkuLine(null);
-                        }
+                        if (firstMatch) selectSku(index, firstMatch);
                       }
                     }}
                   />
@@ -402,13 +465,7 @@ export const CreateOrderPage = () => {
                           aria-selected={line.sku === sku.sku}
                           key={sku.sku}
                           onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => {
-                            updateLine(index, {
-                              sku: sku.sku,
-                              skuQuery: skuLabel(sku),
-                            });
-                            setActiveSkuLine(null);
-                          }}
+                          onClick={() => selectSku(index, sku)}
                         >
                           <strong>{sku.sku}</strong>
                           <span>{sku.itemDescription}</span>
@@ -430,13 +487,34 @@ export const CreateOrderPage = () => {
                   type="number"
                   min="1"
                   max="1000000"
-                  step="1"
-                  value={line.cartons}
-                  onChange={(event) =>
-                    updateLine(index, {
-                      cartons: event.target.valueAsNumber || 1,
-                    })
+                  step="any"
+                  placeholder={
+                    calculated?.skuDetails.quantityPerCarton === 0
+                      ? "Unavailable"
+                      : "Cartons"
                   }
+                  disabled={
+                    !line.sku ||
+                    !calculated ||
+                    calculated.skuDetails.quantityPerCarton <= 0
+                  }
+                  value={line.cartons}
+                  onChange={(event) => {
+                    const cartons =
+                      event.target.value === ""
+                        ? ""
+                        : event.target.valueAsNumber;
+                    updateLine(index, {
+                      cartons,
+                      totalQuantity:
+                        positiveNumber(cartons) && calculated
+                          ? calculateDraftTotal(
+                              cartons,
+                              calculated.skuDetails.quantityPerCarton,
+                            )
+                          : "",
+                    });
+                  }}
                 />
                 <span>
                   {calculated
@@ -445,17 +523,45 @@ export const CreateOrderPage = () => {
                       : "Missing"
                     : "—"}
                 </span>
-                <strong>{calculated?.totalQuantity ?? "—"}</strong>
+                <input
+                  aria-label={`Total quantity for item ${index + 1}`}
+                  type="number"
+                  min="0.000001"
+                  step="any"
+                  placeholder="Enter T-QTY"
+                  disabled={!line.sku}
+                  value={line.totalQuantity}
+                  onChange={(event) => {
+                    const totalQuantity =
+                      event.target.value === ""
+                        ? ""
+                        : event.target.valueAsNumber;
+                    updateLine(index, {
+                      totalQuantity,
+                      cartons:
+                        positiveNumber(totalQuantity) &&
+                        calculated &&
+                        calculated.skuDetails.quantityPerCarton > 0
+                          ? calculateCartonsFromTotalQuantity(
+                              totalQuantity,
+                              calculated.skuDetails.quantityPerCarton,
+                            )
+                          : "",
+                    });
+                  }}
+                />
                 <span>
                   {calculated
-                    ? calculated.skuDetails.weightPerCarton > 0
+                    ? calculated.skuDetails.quantityPerCarton > 0 &&
+                      calculated.skuDetails.weightPerCarton > 0
                       ? calculated.grossWeight
                       : "Missing"
                     : "—"}
                 </span>
                 <span>
                   {calculated
-                    ? calculated.skuDetails.length > 0 &&
+                    ? calculated.skuDetails.quantityPerCarton > 0 &&
+                      calculated.skuDetails.length > 0 &&
                       calculated.skuDetails.breadth > 0 &&
                       calculated.skuDetails.height > 0
                       ? formatDecimal(calculated.volume)
@@ -507,6 +613,7 @@ export const CreateOrderPage = () => {
         <div className="order-submit-row order-submit-only">
           <button
             className="primary-button"
+            aria-busy={saving}
             disabled={
               saving || skus.length === 0 || lines.some((line) => !line.sku)
             }

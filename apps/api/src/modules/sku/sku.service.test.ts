@@ -77,9 +77,10 @@ describe("SkuService", () => {
       oem: "Bajaj",
     });
 
-    expect(result.sku).toBe("KV-B000001");
+    expect(result.sku).toBe("KV-B0001");
+    expect(result.itemDescription).toBe("CORK SHEET 50MM");
     expect(repository.skus).toHaveLength(1);
-    expect(repository.inventory).toEqual([{ sku: "KV-B000001", rowNumber: 2 }]);
+    expect(repository.inventory).toEqual([{ sku: "KV-B0001", rowNumber: 2 }]);
   });
 
   it("creates a provisional SKU with zero packing details", async () => {
@@ -90,8 +91,8 @@ describe("SkuService", () => {
     });
 
     expect(result).toEqual({
-      sku: "KV-T000001",
-      itemDescription: "New sample item",
+      sku: "KV-T0001",
+      itemDescription: "NEW SAMPLE ITEM",
       quantityPerCarton: 0,
       unit: "pcs",
       weightPerCarton: 0,
@@ -106,8 +107,8 @@ describe("SkuService", () => {
     repository.skus.push(
       { ...sampleSku, sku: "FLNG001", rowNumber: 2 },
       { ...sampleSku, sku: "KV-009999", rowNumber: 3 },
-      { ...sampleSku, sku: "KV-T000020", rowNumber: 4 },
-      { ...sampleSku, sku: "KV-B009999", rowNumber: 5 },
+      { ...sampleSku, sku: "KV-T0020", rowNumber: 4 },
+      { ...sampleSku, sku: "KV-B9999", rowNumber: 5 },
     );
 
     const result = await new SkuService(repository).create({
@@ -115,7 +116,7 @@ describe("SkuService", () => {
       oem: "Bajaj",
     });
 
-    expect(result.sku).toBe("KV-B010000");
+    expect(result.sku).toBe("KV-B10000");
     expect(repository.skus).toHaveLength(5);
     expect(repository.inventory).toHaveLength(1);
   });
@@ -127,10 +128,10 @@ describe("SkuService", () => {
   });
 
   it("uses the required prefix for every OEM", () => {
-    expect(generateNextSkuCode([], "Bajaj")).toBe("KV-B000001");
-    expect(generateNextSkuCode([], "TVS")).toBe("KV-T000001");
-    expect(generateNextSkuCode([], "Piaggio")).toBe("KV-P000001");
-    expect(generateNextSkuCode([], "Other")).toBe("KV-X000001");
+    expect(generateNextSkuCode([], "Bajaj")).toBe("KV-B0001");
+    expect(generateNextSkuCode([], "TVS")).toBe("KV-T0001");
+    expect(generateNextSkuCode([], "Piaggio")).toBe("KV-P0001");
+    expect(generateNextSkuCode([], "Other")).toBe("KV-X0001");
   });
 
   it("archives a deleted SKU and excludes it from active results", async () => {
@@ -146,9 +147,9 @@ describe("SkuService", () => {
     expect(repository.skus[0]?.sku).toBe("DELETED-KV-000001");
     expect(
       generateNextSkuCode(
-        [...repository.skus, { ...sampleSku, sku: "DELETED-KV-B000001" }],
+        [...repository.skus, { ...sampleSku, sku: "DELETED-KV-B0001" }],
         "Bajaj",
       ),
-    ).toBe("KV-B000002");
+    ).toBe("KV-B0002");
   });
 });

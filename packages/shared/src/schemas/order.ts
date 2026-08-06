@@ -11,15 +11,27 @@ export const orderStockStatuses = [
 ] as const;
 
 export const createOrderRequestSchema = z.object({
-  customerName: z.string().trim().min(2).max(120),
+  customerName: z
+    .string()
+    .trim()
+    .min(2)
+    .max(120)
+    .transform((value) => value.toUpperCase()),
   dateReceived: z.string().date(),
   orderNotes: z.string().trim().max(1000).default(""),
   items: z
     .array(
-      z.object({
-        sku: skuCodeSchema,
-        cartons: z.number().int().positive().max(1_000_000),
-      }),
+      z
+        .object({
+          sku: skuCodeSchema,
+          cartons: z.number().positive().max(1_000_000).optional(),
+          totalQuantity: z.number().positive().max(1_000_000_000).optional(),
+        })
+        .refine(
+          (value) =>
+            value.cartons !== undefined || value.totalQuantity !== undefined,
+          "Enter cartons or total quantity",
+        ),
     )
     .min(1)
     .max(200),
@@ -29,9 +41,9 @@ export const orderLineSchema = z.object({
   orderLineId: z.string(),
   sku: skuCodeSchema,
   itemDescription: z.string(),
-  quantityPerCarton: z.number().positive(),
+  quantityPerCarton: z.number().nonnegative(),
   unit: z.enum(skuUnits),
-  cartons: z.number().positive(),
+  cartons: z.number().nonnegative(),
   totalQuantity: z.number().nonnegative(),
   weightPerCarton: z.number().nonnegative(),
   grossWeight: z.number().nonnegative(),

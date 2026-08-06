@@ -2,7 +2,7 @@
 
 ## Identifiers
 
-- SKU: `KV-BNNNNNN`, `KV-TNNNNNN`, `KV-PNNNNNN`, or `KV-XNNNNNN`, allocated independently by OEM. Six digits are the minimum and each sequence expands without wrapping. Existing legacy identifiers remain valid and unchanged.
+- SKU: `KV-BNNNN`, `KV-TNNNN`, `KV-PNNNN`, or `KV-XNNNN`, allocated independently by OEM. Four digits are the minimum and each sequence expands without wrapping. Existing legacy identifiers remain valid and unchanged.
 - Order: `ORD-YYYY-NNNN`
 - Order line: `ORD-YYYY-NNNN-LNNN`
 - Receipt, packing, allocation, supplier request, and message records each receive immutable unique IDs.
@@ -33,6 +33,8 @@ QA event status is `IN PACKING` or `FINISHED`. Both states are append events und
 - `AVAILABLE QTY = PACKED TOTAL QTY - TOTAL ASSIGNED`
 - `T-QTY = NO OF CTNS × QUANTITY/CTN`
 - `GROSS WT = NO OF CTNS × WEIGHT/CTN`
-- `VOLUME = LENGTH × BREADTH × HEIGHT × NO OF CTNS / 1,000,000`
+- `VOLUME (CBM) = LENGTH (in) × BREADTH (in) × HEIGHT (in) × NO OF CTNS × 0.000016387064`
 
 Derived values must be recalculated from source fields and must never drift below zero.
+
+Exception: while an SKU's `QUANTITY/CTN` is missing, an order line stores direct `T-QTY` and leaves carton count unavailable. Finishing packing after carton quantity is recorded backfills the pending order and restores the standard formulas.

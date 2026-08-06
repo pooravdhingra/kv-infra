@@ -75,11 +75,6 @@ export const DashboardPage = () => {
               <strong>{dashboard.summary.sendFailures}</strong>
               <small>WhatsApp requests</small>
             </a>
-            <a href="/orders">
-              <span>Completed orders</span>
-              <strong>{dashboard.summary.completedOrders}</strong>
-              <small>Browsable history</small>
-            </a>
           </section>
 
           <section className="section dashboard-action-section">
@@ -127,7 +122,11 @@ export const DashboardPage = () => {
                       </small>
                     </span>
                     <span>
-                      <strong>{order.totalCartons}</strong>
+                      <strong>
+                        {order.hasMissingCartons
+                          ? "Missing"
+                          : order.totalCartons}
+                      </strong>
                       <small>cartons</small>
                     </span>
                     <span

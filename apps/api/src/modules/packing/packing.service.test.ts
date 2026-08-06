@@ -33,6 +33,7 @@ const eventFromRow = (row: unknown[]): PackingEvent => ({
   packedCartons: Number(row[6]),
   defectiveQuantity: Number(row[7]),
   shortQuantity: Number(row[8]),
+  leftUnpackedQuantity: Number(row[14]),
   assignedToOrder: row[9] === "YES",
   orderId: row[10] ? String(row[10]) : null,
   orderLineId: row[11] ? String(row[11]) : null,
@@ -110,6 +111,7 @@ const linkedOrder: Order = {
 describe("PackingService", () => {
   it("moves stock into packing and finishes with reconciled QA quantities", async () => {
     const repository = new FakePackingRepository();
+    let syncedSku = "";
     const service = new PackingService(
       repository,
       { list: async () => [repository.current], update: async () => undefined },
@@ -123,6 +125,10 @@ describe("PackingService", () => {
           requiredQuantity: 0,
           reservedQuantity: 0,
         }),
+        syncSkuPackingDetails: async (sku) => {
+          syncedSku = sku;
+          return 0;
+        },
       },
     );
     const started = await service.start({
@@ -142,6 +148,7 @@ describe("PackingService", () => {
       packedCartons: 4,
       defectiveQuantity: 6,
       shortQuantity: 4,
+      leftUnpackedQuantity: 0,
     });
     expect(finished.status).toBe("FINISHED");
     expect(repository.current).toMatchObject({
@@ -154,9 +161,10 @@ describe("PackingService", () => {
       "IN PACKING",
       "FINISHED",
     ]);
+    expect(syncedSku).toBe("KV-000001");
   });
 
-  it("auto-assigns good packed stock to an explicitly linked order line", async () => {
+  it("packs beyond an order need, assigns only the need, and keeps excess available", async () => {
     const repository = new FakePackingRepository();
     let recordedQuantity = 0;
     const service = new PackingService(
@@ -175,25 +183,32 @@ describe("PackingService", () => {
           requiredQuantity: 40,
           reservedQuantity: 0,
         }),
+        syncSkuPackingDetails: async () => 0,
       },
     );
     const started = await service.start({
       date: "2026-08-04",
       sku: "KV-000001",
-      quantityTaken: 40,
+      quantityTaken: 60,
       orderId: linkedOrder.orderId,
       orderLineId: linkedOrder.items[0]!.orderLineId,
     });
     const finished = await service.finish(started.packingId, {
       date: "2026-08-05",
-      goodQuantity: 40,
-      packedCartons: 4,
+      goodQuantity: 50,
+      packedCartons: 5,
       defectiveQuantity: 0,
       shortQuantity: 0,
+      leftUnpackedQuantity: 10,
     });
 
     expect(finished.assignedQuantity).toBe(40);
     expect(repository.current.totalAssigned).toBe(40);
+    expect(repository.current).toMatchObject({
+      unpackedQuantity: 50,
+      inPackingQuantity: 0,
+      packedCartons: 6,
+    });
     expect(repository.allocationRow?.[1]).toBe(linkedOrder.orderId);
     expect(recordedQuantity).toBe(40);
   });

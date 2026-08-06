@@ -187,6 +187,7 @@ export const NewSupplierRequestPage = () => {
         {message && <div className="notice error-notice">{message}</div>}
         <button
           className="primary-button"
+          aria-busy={saving}
           disabled={
             saving || !line || !supplierNumber || quantity <= 0 || !messageBody
           }

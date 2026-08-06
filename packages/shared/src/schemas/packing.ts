@@ -26,6 +26,7 @@ export const finishPackingRequestSchema = z.object({
   packedCartons: z.number().int().nonnegative().default(0),
   defectiveQuantity: z.number().nonnegative().default(0),
   shortQuantity: z.number().nonnegative().default(0),
+  leftUnpackedQuantity: z.number().nonnegative().default(0),
   notes: z.string().trim().max(1000).default(""),
 });
 
@@ -41,6 +42,7 @@ export const packingSessionSchema = z.object({
   packedCartons: z.number().nonnegative(),
   defectiveQuantity: z.number().nonnegative(),
   shortQuantity: z.number().nonnegative(),
+  leftUnpackedQuantity: z.number().nonnegative(),
   assignedQuantity: z.number().nonnegative(),
   orderId: z.string().nullable(),
   orderLineId: z.string().nullable(),

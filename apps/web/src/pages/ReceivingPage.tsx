@@ -376,6 +376,7 @@ export const ReceivingPage = () => {
                 <button
                   type="button"
                   className="secondary-button"
+                  aria-busy={creatingSku}
                   disabled={creatingSku || !newSkuDescription.trim()}
                   onClick={() => void addNewSku()}
                 >
@@ -520,6 +521,7 @@ export const ReceivingPage = () => {
             {message && <div className="notice">{message}</div>}
             <button
               className="primary-button"
+              aria-busy={saving}
               disabled={
                 saving ||
                 creatingSku ||

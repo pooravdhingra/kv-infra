@@ -61,13 +61,13 @@ All endpoints use JSON under `/api`. Successful responses use `{ "data": ... }`;
   "quantityPerCarton": 100,
   "unit": "pcs",
   "weightPerCarton": 12.5,
-  "length": 50,
-  "breadth": 40,
-  "height": 30
+  "length": 20,
+  "breadth": 16,
+  "height": 12
 }
 ```
 
-`POST /api/skus` requires only `oem` (`Bajaj`, `TVS`, `Piaggio`, or `Other`) and `itemDescription`. It generates an independent OEM sequence using `KV-B000001`, `KV-T000001`, `KV-P000001`, or `KV-X000001` respectively and returns the identifier in the response. Existing `KV-000001`-style identifiers remain unchanged and do not affect OEM sequences. `quantityPerCarton`, `weightPerCarton`, `length`, `breadth`, and `height` are optional and default to `0`; `unit` defaults to `pcs`. Valid units are `pcs`, `kg`, `roll`, `meter`, and `set`, and `weightPerCarton` is measured in kilograms. Update requests use the SKU path parameter; SKU identity and OEM prefix are immutable.
+`POST /api/skus` requires only `oem` (`Bajaj`, `TVS`, `Piaggio`, or `Other`) and `itemDescription`. It generates an independent OEM sequence using `KV-B0001`, `KV-T0001`, `KV-P0001`, or `KV-X0001` respectively and returns the identifier in the response; numbering expands naturally beyond four digits. Existing identifiers remain unchanged and do not affect OEM sequences. `itemDescription` is stored in uppercase. `quantityPerCarton`, `weightPerCarton`, `length`, `breadth`, and `height` are optional and default to `0`; `unit` defaults to `pcs`. New-SKU units are `pcs`, `set`, and `kit`; legacy stored units remain readable. `weightPerCarton` is measured in kilograms, while `length`, `breadth`, and `height` are measured in inches. Update requests use the SKU path parameter; SKU identity and OEM prefix are immutable.
 
 Delete is an audit-preserving archive operation. It prefixes the Packing Master and Inventory identities with `DELETED-` in one Sheets values batch update; logs are never deleted and archived identifiers are never reused.
 
@@ -99,7 +99,7 @@ All quantities are deltas. At least one quantity or the location must change, qu
 }
 ```
 
-The request requires an active SKU and a positive whole-carton quantity. `POST /api/orders` accepts `Idempotency-Key`, generates `ORD-YYYY-NNNN`, creates a readable order tab, fills calculated fields, and reports `READY_TO_RESERVE`, `NEEDS_PACKING`, `NEEDS_SUPPLIER`, or `FULLY_RESERVED` for each line. A fully reserved line always has zero remaining quantity, zero shortfall, and no supplier action. Order reads derive reserved quantity from the append-only allocation ledger. The stock-check endpoint recalculates against current Inventory and repairs the order tab's reserved quantity, status, shortfall, and timestamp cells without assigning additional stock.
+Each item requires an active SKU. When its SKU has a positive Quantity/CTN, send `cartons`; the operator may edit Cartons or T-QTY in the UI and the other value is derived. When Quantity/CTN is missing, send a direct quantity instead: `{ "sku": "KV-X000001", "totalQuantity": 7500 }`. That provisional order line has no carton count until packing records a positive Quantity/CTN and synchronizes the latest SKU measurements into matching pending orders. `POST /api/orders` accepts `Idempotency-Key`, generates `ORD-YYYY-NNNN`, creates a readable order tab, fills calculated fields, and reports `READY_TO_RESERVE`, `NEEDS_PACKING`, `NEEDS_SUPPLIER`, or `FULLY_RESERVED` for each line. A fully reserved line always has zero remaining quantity, zero shortfall, and no supplier action. Order reads derive reserved quantity from the append-only allocation ledger. The stock-check endpoint recalculates against current Inventory and repairs the order tab's reserved quantity, status, shortfall, and timestamp cells without assigning additional stock.
 
 Order-line responses also expose `reservedQuantity`, `remainingQuantity`, supplier-request state, one pure-function-derived suggested action, and valid alternatives. Suggested actions are `RESERVE_STOCK`, `START_PACKING`, `REQUEST_SUPPLIER`, `MARK_RECEIVED`, or `NO_ACTION`; receiving is available as an alternative while demand remains.
 
@@ -149,11 +149,12 @@ The receiving UI accepts suppliers only from `SUPPLIER MASTER LIST`. Supplier ro
   "packedCartons": 9,
   "defectiveQuantity": 6,
   "shortQuantity": 4,
+  "leftUnpackedQuantity": 0,
   "notes": "QA complete"
 }
 ```
 
-Start rejects quantities above unpacked stock or an explicitly linked line's remaining demand. Finish requires exact reconciliation and complete cartons. If linked, all good quantity is assigned to that exact line, an allocation is appended, Inventory assigned quantity increases, and the order row reserved quantity updates.
+Start rejects quantities above unpacked stock, but a linked session may take more than that line's remaining demand. Finish requires exact reconciliation and complete cartons; `leftUnpackedQuantity` returns unfinished pieces to unpacked stock. If linked, good quantity is assigned only up to the exact line's remaining requirement, with any excess kept as available general packed stock.
 
 ### Allocation request
 
@@ -166,6 +167,10 @@ Cancellation uses the append-only allocation ledger as its active-state source. 
 Creation accepts `orderId`, `orderLineId`, a Supplier Master `supplierNumber`, a quantity no greater than current shortfall, editable `messageBody`, `autoFollowUpEnabled`, and notes. Every WhatsApp attempt is append-logged, including failures. Local ten-digit supplier numbers are normalized with `WHATSAPP_DEFAULT_COUNTRY_CODE`, and recipient existence is checked with WhatsApp before a send is logged as successful. Successful messages schedule the next follow-up exactly three days later; a request cannot send twice on the same operator-local calendar day.
 
 The grouped review UI submits approved drafts to `/api/supplier-requests/bulk`. Each draft retains independent supplier, quantity, editable message, follow-up, and notes fields; no request is submitted until the operator explicitly approves every displayed draft. The API validates the whole batch before sending, groups drafts by the selected supplier number, combines each supplier's items into one numbered message, and retains one Supplier Requests row per order line. Distinct supplier messages are sent sequentially with a randomized 5–55 second gap.
+
+## Google Sheets retry behavior
+
+Google Sheets calls use a per-attempt timeout and bounded exponential backoff for timeouts and transient Google responses. The default policy is four attempts. Ordinary transient failures start at 500 ms; quota responses use longer waits starting at 5 seconds, and both add randomized jitter. Validation and sheet-contract errors are never retried. Concurrent same-workbook reads are combined into one batch request, identical in-flight reads are shared, and successful reads use a 15-second cache. Every application write invalidates row data immediately; the order-tab list is invalidated only when a tab is created. The web client allows enough time for the API retry window and keeps the initiating button visibly busy during the operation.
 
 ## Planned endpoints
 

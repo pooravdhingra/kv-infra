@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  calculateCartonsFromTotalQuantity,
   assignInventoryTransition,
   cancelInventoryAssignmentTransition,
   calculateInventoryTotals,
@@ -145,6 +146,7 @@ describe("inventory movements", () => {
     expect(
       finishPackingTransition({
         quantityPerCarton: 10,
+        unpackedQuantity: 20,
         inPackingQuantity: 100,
         packedCartons: 2,
         defectiveShortQuantity: 1,
@@ -153,11 +155,36 @@ describe("inventory movements", () => {
         finishedCartons: 4,
         defectiveQuantity: 6,
         shortQuantity: 4,
+        leftUnpackedQuantity: 0,
       }),
     ).toEqual({
+      unpackedQuantity: 20,
       inPackingQuantity: 50,
       packedCartons: 6,
       defectiveShortQuantity: 11,
+    });
+  });
+
+  it("returns unfinished pieces to unpacked stock", () => {
+    expect(
+      finishPackingTransition({
+        quantityPerCarton: 10,
+        unpackedQuantity: 20,
+        inPackingQuantity: 50,
+        packedCartons: 0,
+        defectiveShortQuantity: 0,
+        quantityTaken: 50,
+        goodQuantity: 30,
+        finishedCartons: 3,
+        defectiveQuantity: 2,
+        shortQuantity: 3,
+        leftUnpackedQuantity: 15,
+      }),
+    ).toEqual({
+      unpackedQuantity: 35,
+      inPackingQuantity: 0,
+      packedCartons: 3,
+      defectiveShortQuantity: 5,
     });
   });
 
@@ -172,6 +199,7 @@ describe("inventory movements", () => {
     expect(() =>
       finishPackingTransition({
         quantityPerCarton: 10,
+        unpackedQuantity: 0,
         inPackingQuantity: 50,
         packedCartons: 0,
         defectiveShortQuantity: 0,
@@ -180,6 +208,7 @@ describe("inventory movements", () => {
         finishedCartons: 4,
         defectiveQuantity: 1,
         shortQuantity: 1,
+        leftUnpackedQuantity: 0,
       }),
     ).toThrow(RangeError);
   });
@@ -192,11 +221,19 @@ describe("order calculations", () => {
         cartons: 10,
         quantityPerCarton: 100,
         weightPerCarton: 12.5,
-        length: 50,
-        breadth: 40,
-        height: 30,
+        length: 10,
+        breadth: 10,
+        height: 10,
       }),
-    ).toEqual({ totalQuantity: 1000, grossWeight: 125, volume: 0.6 });
+    ).toEqual({ totalQuantity: 1000, grossWeight: 125, volume: 0.163871 });
+  });
+
+  it("derives cartons from an operator-entered total", () => {
+    expect(calculateCartonsFromTotalQuantity(1250, 250)).toBe(5);
+    expect(calculateCartonsFromTotalQuantity(1000, 3)).toBe(333.333333333333);
+    expect(() => calculateCartonsFromTotalQuantity(1000, 0)).toThrow(
+      RangeError,
+    );
   });
 
   it("classifies packed, unpacked, and supplier outcomes", () => {

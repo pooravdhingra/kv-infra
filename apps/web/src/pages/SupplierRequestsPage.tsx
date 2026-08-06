@@ -61,6 +61,7 @@ export const SupplierRequestsPage = () => {
         </div>
         <button
           className="primary-button"
+          aria-busy={busy === "due"}
           disabled={Boolean(busy)}
           onClick={() =>
             void run(
@@ -142,10 +143,11 @@ export const SupplierRequestsPage = () => {
               {request.status === "SEND FAILED" && (
                 <button
                   className="text-button"
+                  aria-busy={busy === `${request.requestId}-retry`}
                   disabled={Boolean(busy)}
                   onClick={() =>
                     void run(
-                      request.requestId,
+                      `${request.requestId}-retry`,
                       () => retrySupplierRequest(request.requestId),
                       `${request.requestId} sent successfully.`,
                     )
@@ -157,10 +159,11 @@ export const SupplierRequestsPage = () => {
               {request.status !== "RECEIVED" && request.autoFollowUpEnabled && (
                 <button
                   className="text-button"
+                  aria-busy={busy === `${request.requestId}-follow-up`}
                   disabled={Boolean(busy)}
                   onClick={() =>
                     void run(
-                      request.requestId,
+                      `${request.requestId}-follow-up`,
                       () => sendSupplierFollowUp(request.requestId),
                       `Follow-up sent for ${request.requestId}.`,
                     )
@@ -172,10 +175,11 @@ export const SupplierRequestsPage = () => {
               {request.status === "SENT" && (
                 <button
                   className="text-button"
+                  aria-busy={busy === `${request.requestId}-confirm`}
                   disabled={Boolean(busy)}
                   onClick={() =>
                     void run(
-                      request.requestId,
+                      `${request.requestId}-confirm`,
                       () => markSupplierRequestConfirmed(request.requestId),
                       `${request.requestId} marked confirmed.`,
                     )
@@ -187,10 +191,11 @@ export const SupplierRequestsPage = () => {
               {request.status !== "RECEIVED" && (
                 <button
                   className="text-button"
+                  aria-busy={busy === `${request.requestId}-received`}
                   disabled={Boolean(busy)}
                   onClick={() =>
                     void run(
-                      request.requestId,
+                      `${request.requestId}-received`,
                       () => markSupplierRequestReceived(request.requestId),
                       `${request.requestId} marked received.`,
                     )
@@ -202,10 +207,11 @@ export const SupplierRequestsPage = () => {
               {request.autoFollowUpEnabled && request.status !== "RECEIVED" && (
                 <button
                   className="text-button danger-text"
+                  aria-busy={busy === `${request.requestId}-stop`}
                   disabled={Boolean(busy)}
                   onClick={() =>
                     void run(
-                      request.requestId,
+                      `${request.requestId}-stop`,
                       () =>
                         disableSupplierFollowUps(
                           request.requestId,

@@ -8,7 +8,7 @@ Column names and order below are exact. Integration code must fail visibly when 
 
 One row per SKU. Creating a SKU also creates its zero-valued inventory row if absent.
 
-New SKU identifiers encode the OEM and maintain independent sequences: `KV-B000001` for Bajaj, `KV-T000001` for TVS, `KV-P000001` for Piaggio, and `KV-X000001` for Other. Existing `KV-000001`-style and other legacy identifiers remain valid and unchanged. OEM is encoded in the immutable SKU rather than adding a sheet column. `WEIGHT/CTN` is stored in kilograms. A provisional SKU may be created with only OEM and item description; `QUANTITY/CTN`, `WEIGHT/CTN`, `LENGTH`, `BREADTH`, and `HEIGHT` are stored as `0` until measured and edited, and `UNIT` defaults to `pcs`.
+New SKU identifiers encode the OEM and maintain independent sequences: `KV-B0001` for Bajaj, `KV-T0001` for TVS, `KV-P0001` for Piaggio, and `KV-X0001` for Other. Four digits are the minimum; sequences expand naturally to five or more digits. Existing `KV-000001`-style and other legacy identifiers remain valid and unchanged. OEM is encoded in the immutable SKU rather than adding a sheet column. New SKU units are `pcs`, `set`, or `kit`, and item descriptions are stored in uppercase. `WEIGHT/CTN` is stored in kilograms; `LENGTH`, `BREADTH`, and `HEIGHT` are stored in inches. A provisional SKU may be created with only OEM and item description; `QUANTITY/CTN`, `WEIGHT/CTN`, `LENGTH`, `BREADTH`, and `HEIGHT` are stored as `0` until measured and edited, and `UNIT` defaults to `pcs`.
 
 ## SUPPLIER MASTER LIST
 
@@ -24,7 +24,9 @@ Visible columns: `SKU`, `ITEM DESCRIPTION`, `QUANTITY/CTN`, `UNIT`, `NO OF CTNS`
 
 Hidden columns: `ORDER ID`, `ORDER LINE ID`, `ORDER DATE`, `REQUIRED QTY`, `RESERVED QTY`, `SHORTFALL QTY`, `SUPPLIER REQUEST STATUS`, `LAST UPDATED`, `ORDER NOTES`, `CUSTOMER NAME`.
 
-The first row is frozen and all system columns are hidden. `T-QTY`, `GROSS WT`, `VOLUME`, and `REQUIRED QTY` are formulas. Volume uses centimetre dimensions and is stored in CBM. While pending, `STATUS` is one of `READY TO RESERVE`, `NEEDS PACKING`, `NEEDS SUPPLIER`, or `FULLY RESERVED`. A fully reserved row has zero `SHORTFALL QTY`. The append-only allocation ledger is authoritative for `RESERVED QTY`; a stock-check refresh reconciles that value and updates `STATUS`, `SHORTFALL QTY`, and `LAST UPDATED` without assigning additional stock. Shipping writes `SHIPPED` to `STATUS` and the same completion timestamp to `LAST UPDATED` on every order line, while Inventory reduces `PACKED CTNS` and `TOTAL ASSIGNED` by the shipped quantities. No business rows are deleted or moved between spreadsheets.
+Customer names are stored in uppercase.
+
+The first row is frozen and all system columns are hidden. Normally, `T-QTY`, `GROSS WT`, `VOLUME`, and `REQUIRED QTY` are formulas. A provisional line whose SKU has `QUANTITY/CTN = 0` stores operator-entered `T-QTY` directly, leaves `NO OF CTNS`, `GROSS WT`, and `VOLUME` blank, and keeps `REQUIRED QTY = T-QTY`. When packing later records a positive carton quantity, every matching pending line receives the latest SKU packing values, derives `NO OF CTNS = T-QTY / QUANTITY/CTN`, and returns to normal formulas; completed orders are never rewritten. Volume converts inch dimensions to CBM using `LENGTH × BREADTH × HEIGHT × NO OF CTNS × 0.000016387064`. A stock-check refresh also rewrites this formula for complete pending order rows. While pending, `STATUS` is one of `READY TO RESERVE`, `NEEDS PACKING`, `NEEDS SUPPLIER`, or `FULLY RESERVED`. A fully reserved row has zero `SHORTFALL QTY`. The append-only allocation ledger is authoritative for `RESERVED QTY`; a stock-check refresh reconciles that value and updates `STATUS`, `SHORTFALL QTY`, and `LAST UPDATED` without assigning additional stock. Shipping writes `SHIPPED` to `STATUS` and the same completion timestamp to `LAST UPDATED` on every order line, while Inventory reduces `PACKED CTNS` and `TOTAL ASSIGNED` by the shipped quantities. No business rows are deleted or moved between spreadsheets.
 
 ## INVENTORY
 
@@ -40,11 +42,13 @@ Exactly one row per SKU. Unpacked stock never contributes to available quantity.
 
 Append-only. `ITEM CHECK STATUS` starts as `UNCHECKED`. Order identifiers are blank for general stock. Only an explicit exact order-line link changes its order/request state.
 
+`RECEIVED BY` is stored in uppercase.
+
 ## QA LOG
 
-`PACKING ID`, `DATE`, `SKU`, `ITEM DESCRIPTION`, `QTY TAKEN FOR PACKING`, `GOOD QTY`, `PACKED CTNS`, `DEFECTIVE QTY`, `SHORT QTY`, `ASSIGNED TO ORDER?`, `ORDER ID`, `ORDER LINE ID`, `STATUS`, `NOTES`
+`PACKING ID`, `DATE`, `SKU`, `ITEM DESCRIPTION`, `QTY TAKEN FOR PACKING`, `GOOD QTY`, `PACKED CTNS`, `DEFECTIVE QTY`, `SHORT QTY`, `ASSIGNED TO ORDER?`, `ORDER ID`, `ORDER LINE ID`, `STATUS`, `NOTES`, `LEFT UNPACKED`
 
-Append-only. Starting packing appends an `IN PACKING` event. Finishing appends a second `FINISHED` event with the same packing ID; the initial row is never edited. `GOOD QTY + DEFECTIVE QTY + SHORT QTY` must equal quantity taken, and good quantity must equal complete packed cartons multiplied by the SKU carton quantity.
+Append-only. Starting packing appends an `IN PACKING` event. Finishing appends a second `FINISHED` event with the same packing ID; the initial row is never edited. `GOOD QTY + DEFECTIVE QTY + SHORT QTY + LEFT UNPACKED` must equal quantity taken, and good quantity must equal complete packed cartons multiplied by the SKU carton quantity. Left-unpacked quantity returns to Inventory's unpacked bucket.
 
 ## ORDER ALLOCATIONS
 
@@ -76,5 +80,7 @@ Every attempted send is logged. A successful row has `SENT AT`; a failed row has
 - Read by immutable ID; do not persist row numbers as identity.
 - Record timestamps in ISO 8601 and display them in the operator's local timezone.
 - A retry with the same idempotency key must not duplicate an append.
+- Google Sheets timeouts and transient throttling responses use bounded exponential-backoff retries before an operator-facing error is returned.
+- Concurrent reads for tabs in the same workbook are batched, duplicate in-flight reads are shared, and a short read-through cache is invalidated immediately after application writes.
 - Never physically delete a business row from the application.
 - SKU deletion archives the matching Packing Master and Inventory identities with a `DELETED-` prefix in one batch update. Active views hide archived SKUs, while generated sequence numbers continue to account for them.
