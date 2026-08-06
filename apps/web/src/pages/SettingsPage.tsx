@@ -283,7 +283,7 @@ export const SettingsPage = () => {
           )}
           {whatsappStatus?.connected && (
             <button
-              className="danger-button"
+              className="secondary-button danger-text"
               aria-busy={whatsappDisconnecting}
               disabled={whatsappDisconnecting}
               onClick={() => void disconnectWa()}
