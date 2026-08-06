@@ -6,35 +6,42 @@ import {
   type CreateOrderRequest,
   type Sku,
   type SkuOem,
+  type UpdateOrderRequest,
 } from "@kv-infra/shared";
 
 import {
   apiErrorMessage,
   createOrder,
   createSku,
+  getOrder,
   listSkus,
+  updateOrder,
 } from "../api/client";
 import { formatDecimal } from "../lib/format-number";
 
-type DraftQuantity = number | "";
-type DraftLine = {
+export type DraftQuantity = number | "";
+export type DraftLine = {
+  orderLineId?: string;
   sku: string;
   skuQuery: string;
   cartons: DraftQuantity;
   totalQuantity: DraftQuantity;
 };
 
-const emptyLine = (): DraftLine => ({
+export const emptyLine = (): DraftLine => ({
   sku: "",
   skuQuery: "",
   cartons: 1,
   totalQuantity: "",
 });
 
-const positiveNumber = (value: DraftQuantity): value is number =>
+export const positiveNumber = (value: DraftQuantity): value is number =>
   typeof value === "number" && Number.isFinite(value) && value > 0;
 
-const calculateDraftTotal = (cartons: number, quantityPerCarton: number) =>
+export const calculateDraftTotal = (
+  cartons: number,
+  quantityPerCarton: number,
+) =>
   calculateOrderLineTotals({
     cartons,
     quantityPerCarton,
@@ -44,9 +51,9 @@ const calculateDraftTotal = (cartons: number, quantityPerCarton: number) =>
     height: 0,
   }).totalQuantity;
 
-const skuLabel = (sku: Sku) => `${sku.sku} — ${sku.itemDescription}`;
+export const skuLabel = (sku: Sku) => `${sku.sku} — ${sku.itemDescription}`;
 
-const matchingSkus = (skus: Sku[], query: string) => {
+export const matchingSkus = (skus: Sku[], query: string) => {
   const search = query.trim().toLowerCase();
   if (!search) return skus.slice(0, 8);
 
@@ -79,7 +86,7 @@ const localDate = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
 
-export const CreateOrderPage = () => {
+export const CreateOrderPage = ({ orderId }: { orderId?: string }) => {
   const [skus, setSkus] = useState<Sku[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [dateReceived, setDateReceived] = useState(localDate);
@@ -97,11 +104,33 @@ export const CreateOrderPage = () => {
   >("");
   const [creatingSku, setCreatingSku] = useState(false);
   const [newSkuMessage, setNewSkuMessage] = useState("");
+  const [loadingOrder, setLoadingOrder] = useState(Boolean(orderId));
+  const [editBlocked, setEditBlocked] = useState(false);
   useEffect(() => {
-    void listSkus()
-      .then(setSkus)
-      .catch((error) => setMessage(apiErrorMessage(error)));
-  }, []);
+    void Promise.all([listSkus(), orderId ? getOrder(orderId) : null])
+      .then(([nextSkus, existingOrder]) => {
+        setSkus(nextSkus);
+        if (!existingOrder) return;
+        setCustomerName(existingOrder.customerName);
+        setDateReceived(existingOrder.dateReceived);
+        setOrderNotes(existingOrder.orderNotes);
+        setLines(
+          existingOrder.items.map((item) => ({
+            orderLineId: item.orderLineId,
+            sku: item.sku,
+            skuQuery: skuLabel(item),
+            cartons: item.quantityPerCarton > 0 ? item.cartons : "",
+            totalQuantity: item.totalQuantity,
+          })),
+        );
+        if (existingOrder.status === "COMPLETED") {
+          setEditBlocked(true);
+          setMessage("Shipped orders cannot be edited.");
+        }
+      })
+      .catch((error) => setMessage(apiErrorMessage(error)))
+      .finally(() => setLoadingOrder(false));
+  }, [orderId]);
 
   const preview = useMemo(
     () =>
@@ -258,24 +287,51 @@ export const CreateOrderPage = () => {
     setSaving(true);
     setMessage("");
     try {
-      const input: CreateOrderRequest = {
+      const orderItems = lines.map((line) => {
+        const sku = skus.find((item) => item.sku === line.sku)!;
+        const quantity =
+          sku.quantityPerCarton > 0
+            ? { cartons: Number(line.cartons) }
+            : { totalQuantity: Number(line.totalQuantity) };
+        return {
+          ...(line.orderLineId ? { orderLineId: line.orderLineId } : {}),
+          sku: line.sku,
+          ...quantity,
+        };
+      });
+      const input: CreateOrderRequest | UpdateOrderRequest = {
         customerName,
         dateReceived,
         orderNotes,
-        items: lines.map((line) => {
-          const sku = skus.find((item) => item.sku === line.sku)!;
-          return sku.quantityPerCarton > 0
-            ? { sku: line.sku, cartons: Number(line.cartons) }
-            : { sku: line.sku, totalQuantity: Number(line.totalQuantity) };
-        }),
+        items: orderItems,
       };
-      const order = await createOrder(input);
+      const order = orderId
+        ? await updateOrder(orderId, input as UpdateOrderRequest)
+        : await createOrder(input as CreateOrderRequest);
       window.location.assign(`/orders/${encodeURIComponent(order.orderId)}`);
     } catch (error) {
       setMessage(apiErrorMessage(error));
       setSaving(false);
     }
   };
+
+  if (orderId && !loadingOrder && editBlocked)
+    return (
+      <section className="page-panel">
+        <a
+          className="back-link"
+          href={`/orders/${encodeURIComponent(orderId)}`}
+        >
+          ← Order details
+        </a>
+        <div className="page-title-row">
+          <div>
+            <h1>Edit order</h1>
+          </div>
+        </div>
+        <div className="notice error-notice">{message}</div>
+      </section>
+    );
 
   return (
     <section className="page-panel">
@@ -284,7 +340,7 @@ export const CreateOrderPage = () => {
       </a>
       <div className="page-title-row">
         <div>
-          <h1>New order</h1>
+          <h1>{orderId ? "Edit order" : "New order"}</h1>
         </div>
       </div>
       <form className="order-form" onSubmit={submit}>
@@ -395,10 +451,6 @@ export const CreateOrderPage = () => {
             >
               {creatingSku ? "Creating…" : "Create and select SKU"}
             </button>
-            <small>
-              Quantity / CTN can be entered in the order row. Weight and
-              dimensions can be added later from the SKU page.
-            </small>
           </div>
         )}
         <div
@@ -429,6 +481,7 @@ export const CreateOrderPage = () => {
                     aria-autocomplete="list"
                     aria-invalid={!line.sku}
                     autoComplete="off"
+                    disabled={Boolean(line.orderLineId)}
                     placeholder="Type SKU or item description"
                     value={line.skuQuery}
                     onFocus={() => setActiveSkuLine(index)}
@@ -568,18 +621,22 @@ export const CreateOrderPage = () => {
                       : "Missing"
                     : "—"}
                 </span>
-                <button
-                  type="button"
-                  className="text-button danger-text"
-                  disabled={lines.length === 1}
-                  onClick={() =>
-                    setLines(
-                      lines.filter((_, lineIndex) => lineIndex !== index),
-                    )
-                  }
-                >
-                  Remove
-                </button>
+                {line.orderLineId ? (
+                  <span className="locked-line-label">Existing</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-button danger-text"
+                    disabled={lines.length === 1}
+                    onClick={() =>
+                      setLines(
+                        lines.filter((_, lineIndex) => lineIndex !== index),
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
             );
           })}
@@ -615,10 +672,19 @@ export const CreateOrderPage = () => {
             className="primary-button"
             aria-busy={saving}
             disabled={
-              saving || skus.length === 0 || lines.some((line) => !line.sku)
+              saving ||
+              loadingOrder ||
+              skus.length === 0 ||
+              lines.some((line) => !line.sku)
             }
           >
-            {saving ? "Creating order…" : "Create order & check stock"}
+            {saving
+              ? orderId
+                ? "Saving changes…"
+                : "Creating order…"
+              : orderId
+                ? "Save order changes"
+                : "Create order & check stock"}
           </button>
         </div>
       </form>

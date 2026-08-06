@@ -72,6 +72,11 @@ class FakeOrderRepository implements OrderRepository {
     this.written = values;
     return { sheetId: 99, title };
   }
+  async update(title: string, values: unknown[][]) {
+    this.written = [[...ORDER_HEADERS], ...values];
+    const sheet = this.sheets.find((candidate) => candidate.title === title);
+    if (sheet) sheet.rows = this.written;
+  }
   async updateStockCheck(_title: string, items: OrderLine[]) {
     this.stockCheckWrites = items;
   }
@@ -266,6 +271,90 @@ describe("OrderService", () => {
       stockStatus: "NEEDS_PACKING",
       shortfallQuantity: 400,
     });
+  });
+
+  it("edits pending quantities and appends new order lines without replacing existing identities", async () => {
+    const repository = new FakeOrderRepository();
+    const service = new OrderService(
+      repository,
+      skuRepository,
+      inventoryService,
+    );
+    const created = await service.create({
+      customerName: "ABC Traders",
+      dateReceived: "2026-08-04",
+      orderNotes: "Original",
+      items: [{ sku: "KV-000001", cartons: 10 }],
+    });
+    repository.sheets = [
+      { sheetId: 99, title: created.sheetTitle, rows: repository.written },
+    ];
+
+    const updated = await service.update(created.orderId, {
+      customerName: "Updated Traders",
+      dateReceived: "2026-08-05",
+      orderNotes: "Revised",
+      items: [
+        {
+          orderLineId: created.items[0]!.orderLineId,
+          sku: "KV-000001",
+          cartons: 5,
+        },
+        { sku: "KV-000001", cartons: 2 },
+      ],
+    });
+
+    expect(updated).toMatchObject({
+      customerName: "UPDATED TRADERS",
+      dateReceived: "2026-08-05",
+      orderNotes: "Revised",
+      totalQuantity: 700,
+    });
+    expect(updated.items.map((item) => item.orderLineId)).toEqual([
+      created.items[0]!.orderLineId,
+      `${created.orderId}-L002`,
+    ]);
+    expect(repository.written[1]?.[22]).toBe("UPDATED TRADERS");
+    expect(repository.written[2]?.[14]).toBe(`${created.orderId}-L002`);
+  });
+
+  it("does not remove existing lines or reduce them below reserved quantity", async () => {
+    const repository = new FakeOrderRepository();
+    const service = new OrderService(
+      repository,
+      skuRepository,
+      inventoryService,
+    );
+    const created = await service.create({
+      customerName: "ABC Traders",
+      dateReceived: "2026-08-04",
+      items: [{ sku: "KV-000001", cartons: 10 }],
+    });
+    repository.written[1]![17] = 500;
+    repository.sheets = [
+      { sheetId: 99, title: created.sheetTitle, rows: repository.written },
+    ];
+
+    await expect(
+      service.update(created.orderId, {
+        customerName: "ABC Traders",
+        dateReceived: "2026-08-04",
+        items: [{ sku: "KV-000001", cartons: 2 }],
+      }),
+    ).rejects.toMatchObject({ code: "ORDER_LINE_REMOVAL_NOT_ALLOWED" });
+    await expect(
+      service.update(created.orderId, {
+        customerName: "ABC Traders",
+        dateReceived: "2026-08-04",
+        items: [
+          {
+            orderLineId: created.items[0]!.orderLineId,
+            sku: "KV-000001",
+            cartons: 4,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "ORDER_QUANTITY_BELOW_RESERVED" });
   });
 
   it("reports no shortfall or supplier action after the line is fully reserved", async () => {

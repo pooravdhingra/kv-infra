@@ -43,9 +43,17 @@ export const OrdersPage = () => {
         <div>
           <h1>Orders</h1>
         </div>
-        <a className="primary-button create-order-link" href="/orders/new">
-          + Create new order
-        </a>
+        <div className="orders-title-actions">
+          <a
+            className="secondary-button create-order-link"
+            href="/orders/client-links"
+          >
+            Client order links
+          </a>
+          <a className="primary-button create-order-link" href="/orders/new">
+            + Create new order
+          </a>
+        </div>
       </div>
 
       <div className="order-tabs" role="tablist" aria-label="Order status">

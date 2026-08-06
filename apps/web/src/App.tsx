@@ -21,6 +21,9 @@ import { GroupSupplierRequestsPage } from "./pages/GroupSupplierRequestsPage";
 import { AuthPage } from "./pages/AuthPage";
 import { getAuthSession, logout } from "./api/client";
 import { resolveInitialAuthSession } from "./lib/auth-session";
+import { PublicOrderPage } from "./pages/PublicOrderPage";
+import { PublicSkuPage } from "./pages/PublicSkuPage";
+import { ClientOrderLinksPage } from "./pages/ClientOrderLinksPage";
 
 const Workspace = ({
   session,
@@ -36,6 +39,7 @@ const Workspace = ({
     "/inventory": <InventoryPage />,
     "/orders": <OrdersPage />,
     "/orders/new": <CreateOrderPage />,
+    "/orders/client-links": <ClientOrderLinksPage />,
     "/receiving": <ReceivingPage />,
     "/packing": <PackingPage />,
     "/packing/start": <StartPackingPage />,
@@ -46,12 +50,15 @@ const Workspace = ({
   };
 
   const inventoryMatch = path.match(/^\/inventory\/([^/]+)$/);
+  const orderEditMatch = path.match(/^\/orders\/([^/]+)\/edit$/);
   const orderMatch = path.match(/^\/orders\/([^/]+)$/);
   const packingFinishMatch = path.match(/^\/packing\/([^/]+)\/finish$/);
   const routedPage = pages[path] ? (
     pages[path]
   ) : inventoryMatch ? (
     <InventoryDetailPage sku={decodeURIComponent(inventoryMatch[1]!)} />
+  ) : orderEditMatch ? (
+    <CreateOrderPage orderId={decodeURIComponent(orderEditMatch[1]!)} />
   ) : orderMatch ? (
     <OrderDetailPage orderId={decodeURIComponent(orderMatch[1]!)} />
   ) : packingFinishMatch ? (
@@ -67,7 +74,7 @@ const Workspace = ({
   );
 };
 
-export const App = () => {
+const AuthenticatedApp = () => {
   const [session, setSession] = useState<AuthSession | null>(null);
 
   useEffect(() => {
@@ -119,4 +126,15 @@ export const App = () => {
       }}
     />
   );
+};
+
+export const App = () => {
+  const path = window.location.pathname;
+  const publicOrderMatch = path.match(/^\/order\/([^/]+)$/);
+  if (publicOrderMatch)
+    return <PublicOrderPage token={decodeURIComponent(publicOrderMatch[1]!)} />;
+  const publicSkuMatch = path.match(/^\/add-sku\/([^/]+)$/);
+  if (publicSkuMatch)
+    return <PublicSkuPage token={decodeURIComponent(publicSkuMatch[1]!)} />;
+  return <AuthenticatedApp />;
 };

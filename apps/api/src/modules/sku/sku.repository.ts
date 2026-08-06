@@ -1,8 +1,10 @@
 import {
   INVENTORY_HEADERS,
+  LEGACY_PACKING_MASTER_HEADERS,
   PACKING_MASTER_HEADERS,
   skuSchema,
   type Sku,
+  type SkuOem,
 } from "@kv-infra/shared";
 
 import { env } from "../../config/env.js";
@@ -14,19 +16,20 @@ export type InventoryRecord = {
   sku: string;
 };
 
-export type SkuRecord = Sku & { rowNumber: number };
+export type SkuRecord = Sku & { rowNumber: number; oem?: SkuOem };
 
 export interface SkuRepository {
   listSkus(): Promise<SkuRecord[]>;
   listInventory(): Promise<InventoryRecord[]>;
-  appendSku(sku: Sku): Promise<void>;
+  appendSku(sku: Sku, oem: SkuOem): Promise<void>;
   appendInventory(sku: Sku, rowNumber: number): Promise<void>;
-  updateSku(rowNumber: number, sku: Sku): Promise<void>;
+  updateSku(rowNumber: number, sku: Sku, oem?: SkuOem): Promise<void>;
   updateInventoryIdentity(rowNumber: number, sku: Sku): Promise<void>;
   archiveSku(
     skuRowNumber: number,
     inventoryRowNumber: number | undefined,
     sku: Sku,
+    oem?: SkuOem,
   ): Promise<void>;
 }
 
@@ -53,14 +56,44 @@ const numberCell = (value: unknown, label: string, rowNumber: number) => {
   return number;
 };
 
+export const inferSkuOem = (rawSku: string): SkuOem => {
+  const sku = rawSku.replace(/^DELETED-/, "").toUpperCase();
+  if (/^KV-B\d{4,}$/.test(sku)) return "Bajaj";
+  if (/^KV-T\d{4,}$/.test(sku)) return "TVS";
+  if (/^KV-P\d{4,}$/.test(sku)) return "Piaggio";
+  return "Other";
+};
+
 export class GoogleSheetsSkuRepository implements SkuRepository {
   constructor(private readonly sheets: GoogleSheetsClient) {}
 
   async listSkus(): Promise<SkuRecord[]> {
-    const rows = await this.sheets.readRows(
+    let rows = await this.sheets.readRows(
       requiredSpreadsheetId(),
       env.PACKING_MASTER_SHEET_NAME,
     );
+    const headers = (rows[0] ?? []).map(String);
+    if (
+      headers.length === LEGACY_PACKING_MASTER_HEADERS.length &&
+      headers.every(
+        (header, index) => header === LEGACY_PACKING_MASTER_HEADERS[index],
+      )
+    ) {
+      const escaped = env.PACKING_MASTER_SHEET_NAME.replaceAll("'", "''");
+      await this.sheets.updateRange(
+        requiredSpreadsheetId(),
+        `'${escaped}'!I1:I${Math.max(rows.length, 1)}`,
+        [
+          ["OEM"],
+          ...rows.slice(1).map((row) => [inferSkuOem(String(row[0] ?? ""))]),
+        ],
+      );
+      rows = rows.map((row, index) =>
+        index === 0
+          ? [...row, "OEM"]
+          : [...row, inferSkuOem(String(row[0] ?? ""))],
+      );
+    }
     this.assertHeaders(
       rows[0] ?? [],
       PACKING_MASTER_HEADERS,
@@ -88,7 +121,18 @@ export class GoogleSheetsSkuRepository implements SkuRepository {
           parsed.error.flatten(),
         );
       }
-      return [{ ...parsed.data, rowNumber }];
+      const oem = String(row[8] ?? "").trim();
+      return [
+        {
+          ...parsed.data,
+          rowNumber,
+          oem: (["Bajaj", "TVS", "Piaggio", "Other"] as const).includes(
+            oem as SkuOem,
+          )
+            ? (oem as SkuOem)
+            : inferSkuOem(parsed.data.sku),
+        },
+      ];
     });
   }
 
@@ -111,7 +155,7 @@ export class GoogleSheetsSkuRepository implements SkuRepository {
       );
   }
 
-  async appendSku(sku: Sku) {
+  async appendSku(sku: Sku, oem: SkuOem) {
     await this.sheets.appendRow(
       requiredSpreadsheetId(),
       env.PACKING_MASTER_SHEET_NAME,
@@ -124,6 +168,7 @@ export class GoogleSheetsSkuRepository implements SkuRepository {
         sku.length,
         sku.breadth,
         sku.height,
+        oem,
       ],
     );
   }
@@ -154,7 +199,7 @@ export class GoogleSheetsSkuRepository implements SkuRepository {
     );
   }
 
-  async updateSku(rowNumber: number, sku: Sku) {
+  async updateSku(rowNumber: number, sku: Sku, oem?: SkuOem) {
     await this.sheets.updateRow(
       requiredSpreadsheetId(),
       env.PACKING_MASTER_SHEET_NAME,
@@ -168,6 +213,7 @@ export class GoogleSheetsSkuRepository implements SkuRepository {
         sku.length,
         sku.breadth,
         sku.height,
+        oem ?? inferSkuOem(sku.sku),
       ],
     );
   }
@@ -183,10 +229,11 @@ export class GoogleSheetsSkuRepository implements SkuRepository {
     skuRowNumber: number,
     inventoryRowNumber: number | undefined,
     sku: Sku,
+    oem?: SkuOem,
   ) {
     const archivedSku = `DELETED-${sku.sku}`;
     const archivedDescription = `[DELETED] ${sku.itemDescription}`;
-    const packingRange = `'${env.PACKING_MASTER_SHEET_NAME.replaceAll("'", "''")}'!A${skuRowNumber}:H${skuRowNumber}`;
+    const packingRange = `'${env.PACKING_MASTER_SHEET_NAME.replaceAll("'", "''")}'!A${skuRowNumber}:I${skuRowNumber}`;
     const updates: Array<{ range: string; values: unknown[][] }> = [
       {
         range: packingRange,
@@ -200,6 +247,7 @@ export class GoogleSheetsSkuRepository implements SkuRepository {
             sku.length,
             sku.breadth,
             sku.height,
+            oem ?? inferSkuOem(sku.sku),
           ],
         ],
       },

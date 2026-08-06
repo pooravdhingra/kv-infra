@@ -6,7 +6,7 @@ The operator dashboard is a clean action layer, Google Sheets are the verificati
 
 ## MVP users
 
-Two authenticated profiles exist: Operator and Owner. Both currently open the same operations workspace; the retained Owner role is reserved for a later, higher-access dashboard. Customer access and general role management are not part of the MVP.
+Two authenticated profiles exist: Operator and Owner. Both currently open the same operations workspace; the retained Owner role is reserved for a later, higher-access dashboard. Customers do not receive accounts or workspace access. A signed, customer-specific capability link permits one order submission and then displays only that order's restricted summary.
 
 ## MVP capabilities
 
@@ -19,6 +19,8 @@ Two authenticated profiles exist: Operator and Owner. Both currently open the sa
 7. Surface three-day supplier follow-ups until explicitly received or disabled.
 8. Receive material, finish packing/QA, and allocate it to an order.
 9. Maintain one inventory summary row per SKU.
+10. Accept a client order through a signed single-submit link and provide a permanent secret mobile SKU-creation form.
+11. Let an authenticated operator correct a pending order without exposing editing through the client link or deleting existing order lines.
 
 ## Primary screens
 
@@ -29,7 +31,8 @@ Two authenticated profiles exist: Operator and Owner. Both currently open the sa
 - Receive material
 - Packing overview, start packing, and finish packing
 - Inventory list and detail
-- Settings/connections
+- Settings/connections and permanent mobile SKU link
+- Client order-link management and public order/summary form
 
 ## Suggested action order
 
@@ -41,7 +44,7 @@ Two authenticated profiles exist: Operator and Owner. Both currently open the sa
 
 ## Out of scope
 
-Client portal, predictive analytics, shipping documents, sticker printing, nested packing hierarchy, full management analytics, and container optimization.
+A general client portal or login, predictive analytics, shipping documents, sticker printing, nested packing hierarchy, full management analytics, and container optimization.
 
 ## Measurement units
 

@@ -49,6 +49,12 @@ import {
   requireAuthentication,
 } from "./modules/auth/auth.routes.js";
 import { AuthService } from "./modules/auth/auth.service.js";
+import { GoogleSheetsClientOrderLinkRepository } from "./modules/public-links/client-order-link.repository.js";
+import {
+  createClientOrderLinkRouter,
+  createPublicLinkRouter,
+} from "./modules/public-links/public-link.routes.js";
+import { PublicLinkService } from "./modules/public-links/public-link.service.js";
 
 export const createHealthResponse = () => ({
   data: {
@@ -73,13 +79,15 @@ export const createApp = () => {
 
   const authService = new AuthService();
   app.use(`${API_PREFIX}/auth`, createAuthRouter(authService));
-  app.use(API_PREFIX, requireAuthentication(authService));
 
   const tokenStore = new EncryptedFileTokenStore();
   const oauth = new GoogleOAuthService(tokenStore);
   const sheets = new GoogleSheetsClient(oauth);
   const skuRepository = new GoogleSheetsSkuRepository(sheets);
   const skuService = new SkuService(skuRepository);
+  const clientOrderLinkRepository = new GoogleSheetsClientOrderLinkRepository(
+    sheets,
+  );
   const inventoryRepository = new GoogleSheetsInventoryRepository(sheets);
   const inventoryService = new InventoryService(inventoryRepository);
   const allocationRepository = new GoogleSheetsAllocationRepository(sheets);
@@ -132,9 +140,29 @@ export const createApp = () => {
     receivingService,
     skuService,
   );
+  const publicLinkService = new PublicLinkService(
+    clientOrderLinkRepository,
+    orderService,
+    skuService,
+  );
+
+  app.use(`${API_PREFIX}/public`, createPublicLinkRouter(publicLinkService));
+  app.use(API_PREFIX, requireAuthentication(authService));
 
   app.use(`${API_PREFIX}/dashboard`, createDashboardRouter(dashboardService));
-  app.use(`${API_PREFIX}/google`, createGoogleRouter(oauth, sheets));
+  app.use(
+    `${API_PREFIX}/client-order-links`,
+    createClientOrderLinkRouter(publicLinkService),
+  );
+  app.use(
+    `${API_PREFIX}/google`,
+    createGoogleRouter(oauth, sheets, async () => {
+      await Promise.all([
+        skuRepository.listSkus(),
+        clientOrderLinkRepository.list(),
+      ]);
+    }),
+  );
   app.use(`${API_PREFIX}/skus`, createSkuRouter(skuService));
   app.use(`${API_PREFIX}/inventory`, createInventoryRouter(inventoryService));
   app.use(

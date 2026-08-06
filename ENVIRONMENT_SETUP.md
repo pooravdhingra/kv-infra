@@ -33,7 +33,17 @@ In the master spreadsheet, create these exact tabs and paste each header row int
 ### `PACKING MASTER LIST`
 
 ```text
-SKU	ITEM DESCRIPTION	QUANTITY/CTN	UNIT	WEIGHT/CTN	LENGTH	BREADTH	HEIGHT
+SKU	ITEM DESCRIPTION	QUANTITY/CTN	UNIT	WEIGHT/CTN	LENGTH	BREADTH	HEIGHT	OEM
+```
+
+Existing eight-column Packing Master tabs are upgraded automatically: the application adds column I as `OEM`, infers encoded Bajaj/TVS/Piaggio values, and uses `Other` for legacy identifiers.
+
+### `CLIENT ORDER LINKS`
+
+This tab is created automatically when Sheets is tested or the first client link is generated. Its header is:
+
+```text
+LINK ID	CUSTOMER NAME	CREATED AT	ORDER ID	SUBMITTED AT	DISABLED AT
 ```
 
 ### `INVENTORY`
@@ -136,6 +146,7 @@ QA_LOG_SHEET_NAME=QA LOG
 ORDER_ALLOCATIONS_SHEET_NAME=ORDER ALLOCATIONS
 SUPPLIER_REQUESTS_SHEET_NAME=SUPPLIER REQUESTS
 WHATSAPP_LOG_SHEET_NAME=WHATSAPP LOG
+CLIENT_ORDER_LINKS_SHEET_NAME=CLIENT ORDER LINKS
 GOOGLE_SHEETS_TIMEOUT_MS=10000
 GOOGLE_SHEETS_RETRY_ATTEMPTS=4
 GOOGLE_SHEETS_RETRY_BASE_DELAY_MS=500
@@ -149,7 +160,10 @@ FOLLOW_UP_POLL_MINUTES=60
 
 SESSION_SECRET=first-generated-random-value
 TOKEN_ENCRYPTION_KEY=second-generated-random-value
+PUBLIC_SKU_FORM_TOKEN=third-generated-random-value
 ```
+
+Generate `PUBLIC_SKU_FORM_TOKEN` with another `openssl rand -hex 32`. Keep this value stable: it is embedded in the permanent mobile SKU URL shown in Settings. Changing it immediately invalidates the old link.
 
 Keep both passwords only in the ignored local `.env`. If `OWNER_PASSWORD` is blank, Owner temporarily uses the Operator password while still receiving an `OWNER` session. Set a distinct Owner password before sharing Owner access. `SESSION_SECRET` must contain at least 32 characters because it signs both application sessions and Google OAuth state.
 

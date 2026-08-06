@@ -7,6 +7,7 @@ import type {
   SkuRepository,
 } from "./sku.repository.js";
 import { generateNextSkuCode, SkuService } from "./sku.service.js";
+import { inferSkuOem } from "./sku.repository.js";
 
 const sampleSku: Sku = {
   sku: "KV-000001",
@@ -70,6 +71,13 @@ class FakeSkuRepository implements SkuRepository {
 }
 
 describe("SkuService", () => {
+  it("infers OEM values when migrating existing Packing Master rows", () => {
+    expect(inferSkuOem("KV-B0001")).toBe("Bajaj");
+    expect(inferSkuOem("DELETED-KV-T0042")).toBe("TVS");
+    expect(inferSkuOem("KV-P9999")).toBe("Piaggio");
+    expect(inferSkuOem("KV-000001")).toBe("Other");
+  });
+
   it("creates the packing and inventory records", async () => {
     const repository = new FakeSkuRepository();
     const result = await new SkuService(repository).create({

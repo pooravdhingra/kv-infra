@@ -21,6 +21,18 @@ export const PACKING_MASTER_HEADERS = [
   "LENGTH",
   "BREADTH",
   "HEIGHT",
+  "OEM",
+] as const;
+
+export const LEGACY_PACKING_MASTER_HEADERS = PACKING_MASTER_HEADERS.slice(0, 8);
+
+export const CLIENT_ORDER_LINK_HEADERS = [
+  "LINK ID",
+  "CUSTOMER NAME",
+  "CREATED AT",
+  "ORDER ID",
+  "SUBMITTED AT",
+  "DISABLED AT",
 ] as const;
 
 export const SUPPLIER_MASTER_HEADERS = [

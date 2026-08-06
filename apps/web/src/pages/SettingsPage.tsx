@@ -16,6 +16,7 @@ import {
   disconnectWhatsApp,
   getWhatsAppQr,
   getWhatsAppStatus,
+  getPublicTools,
 } from "../api/client";
 
 type Status = GoogleStatusResponse["data"];
@@ -37,6 +38,8 @@ export const SettingsPage = () => {
   const [qr, setQr] = useState<string | null>(null);
   const [qrImage, setQrImage] = useState("");
   const [whatsappMessage, setWhatsAppMessage] = useState("");
+  const [publicSkuFormUrl, setPublicSkuFormUrl] = useState<string | null>(null);
+  const [publicToolMessage, setPublicToolMessage] = useState("");
 
   const refresh = async () => setStatus(await getGoogleStatus());
 
@@ -45,6 +48,9 @@ export const SettingsPage = () => {
     void getWhatsAppStatus()
       .then(setWhatsAppStatus)
       .catch((error) => setWhatsAppMessage(apiErrorMessage(error)));
+    void getPublicTools()
+      .then((tools) => setPublicSkuFormUrl(tools.skuFormUrl))
+      .catch(() => setPublicSkuFormUrl(null));
     if (
       new URLSearchParams(window.location.search).get("google") === "connected"
     ) {
@@ -298,6 +304,48 @@ export const SettingsPage = () => {
             <p>Scan with WhatsApp → Linked devices → Link a device.</p>
           </div>
         )}
+      </div>
+
+      <div className="settings-section">
+        <div className="section-heading">
+          <h2>Mobile SKU form</h2>
+        </div>
+        <p className="lead">
+          This permanent private link creates SKUs without an application login.
+          Share it only with trusted staff.
+        </p>
+        {publicSkuFormUrl ? (
+          <div className="public-tool-link">
+            <input
+              aria-label="Mobile SKU form link"
+              readOnly
+              value={publicSkuFormUrl}
+            />
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() =>
+                void navigator.clipboard
+                  .writeText(publicSkuFormUrl)
+                  .then(() =>
+                    setPublicToolMessage("Mobile SKU form link copied."),
+                  )
+                  .catch(() =>
+                    setPublicToolMessage(
+                      "Could not copy the link. Select it manually.",
+                    ),
+                  )
+              }
+            >
+              Copy link
+            </button>
+          </div>
+        ) : (
+          <div className="notice error-notice">
+            Set PUBLIC_SKU_FORM_TOKEN to enable the permanent SKU form.
+          </div>
+        )}
+        {publicToolMessage && <div className="notice">{publicToolMessage}</div>}
       </div>
     </section>
   );

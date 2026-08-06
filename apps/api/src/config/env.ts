@@ -38,6 +38,7 @@ const envSchema = z.object({
   ORDER_ALLOCATIONS_SHEET_NAME: z.string().default("ORDER ALLOCATIONS"),
   SUPPLIER_REQUESTS_SHEET_NAME: z.string().default("SUPPLIER REQUESTS"),
   WHATSAPP_LOG_SHEET_NAME: z.string().default("WHATSAPP LOG"),
+  CLIENT_ORDER_LINKS_SHEET_NAME: z.string().default("CLIENT ORDER LINKS"),
   GOOGLE_SHEETS_TIMEOUT_MS: z.coerce.number().int().min(1_000).default(10_000),
   GOOGLE_SHEETS_RETRY_ATTEMPTS: z.coerce
     .number()
@@ -64,6 +65,7 @@ const envSchema = z.object({
     .default("91"),
   SESSION_SECRET: z.string().default(""),
   TOKEN_ENCRYPTION_KEY: z.string().default(""),
+  PUBLIC_SKU_FORM_TOKEN: z.string().default(""),
 });
 
 export const env = envSchema.parse(process.env);

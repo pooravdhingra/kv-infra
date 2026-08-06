@@ -23,6 +23,11 @@ import {
   supplierRequestResponseSchema,
   whatsappQrSchema,
   whatsappStatusSchema,
+  clientOrderLinkListResponseSchema,
+  clientOrderLinkResponseSchema,
+  publicOrderStateSchema,
+  publicSkuFormStatusSchema,
+  publicToolsSchema,
   type CancelAllocationRequest,
   type BulkCreateSupplierRequests,
   type CreateAllocationRequest,
@@ -34,7 +39,9 @@ import {
   type ManualInventoryAdjustment,
   type StartPackingRequest,
   type UpdateSkuRequest,
+  type UpdateOrderRequest,
   type AuthRole,
+  type PublicOrderSubmission,
 } from "@kv-infra/shared";
 import axios, { AxiosError } from "axios";
 
@@ -166,6 +173,63 @@ export const createOrder = async (input: CreateOrderRequest) =>
         headers: { "Idempotency-Key": crypto.randomUUID() },
       })
     ).data,
+  ).data;
+
+export const updateOrder = async (orderId: string, input: UpdateOrderRequest) =>
+  orderResponseSchema.parse(
+    (await api.put(`/orders/${encodeURIComponent(orderId)}`, input)).data,
+  ).data;
+
+export const listClientOrderLinks = async () =>
+  clientOrderLinkListResponseSchema.parse(
+    (await api.get("/client-order-links")).data,
+  ).data;
+
+export const createClientOrderLink = async (customerName: string) =>
+  clientOrderLinkResponseSchema.parse(
+    (await api.post("/client-order-links", { customerName })).data,
+  ).data;
+
+export const disableClientOrderLink = async (linkId: string) =>
+  clientOrderLinkResponseSchema.parse(
+    (
+      await api.post(
+        `/client-order-links/${encodeURIComponent(linkId)}/disable`,
+      )
+    ).data,
+  ).data;
+
+export const getPublicTools = async () =>
+  publicToolsSchema.parse(
+    (await api.get("/client-order-links/public-tools")).data,
+  ).data;
+
+export const getPublicOrderState = async (token: string) =>
+  publicOrderStateSchema.parse(
+    (await api.get(`/public/orders/${encodeURIComponent(token)}`)).data,
+  ).data;
+
+export const submitPublicOrder = async (
+  token: string,
+  input: PublicOrderSubmission,
+) =>
+  publicOrderStateSchema.parse(
+    (
+      await api.post(`/public/orders/${encodeURIComponent(token)}`, input, {
+        headers: { "Idempotency-Key": `public-order-${token}` },
+      })
+    ).data,
+  ).data;
+
+export const getPublicSkuFormStatus = async (token: string) =>
+  publicSkuFormStatusSchema.parse(
+    (await api.get(`/public/sku-form/${encodeURIComponent(token)}`)).data,
+  ).data;
+
+export const createPublicSku = async (token: string, input: CreateSkuRequest) =>
+  skuResponseSchema.parse(
+    (await api.post(`/public/sku-form/${encodeURIComponent(token)}`, input))
+      .data,
   ).data;
 
 export const runOrderStockCheck = async (orderId: string) =>

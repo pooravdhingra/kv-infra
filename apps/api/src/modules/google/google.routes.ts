@@ -13,6 +13,7 @@ const callbackQuerySchema = z.object({
 export const createGoogleRouter = (
   oauth: GoogleOAuthService,
   sheets: GoogleSheetsClient,
+  prepareContract?: () => Promise<unknown>,
 ) => {
   const router = Router();
 
@@ -36,6 +37,7 @@ export const createGoogleRouter = (
   });
 
   router.post("/test", async (_request, response) => {
+    await prepareContract?.();
     response.json({ data: await sheets.testConnection() });
   });
 

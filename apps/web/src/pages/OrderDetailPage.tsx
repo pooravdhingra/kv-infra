@@ -170,6 +170,12 @@ export const OrderDetailPage = ({ orderId }: { orderId: string }) => {
             <span className="stock-badge shipped">Shipped</span>
           ) : (
             <>
+              <a
+                className="secondary-button"
+                href={`/orders/${encodeURIComponent(order.orderId)}/edit`}
+              >
+                Edit order
+              </a>
               {supplierShortfallLines.length > 0 && (
                 <a
                   className="secondary-button"

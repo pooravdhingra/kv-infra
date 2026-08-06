@@ -37,6 +37,8 @@ export const generateNextSkuCode = (
 };
 
 export class SkuService {
+  private creationQueue: Promise<void> = Promise.resolve();
+
   constructor(private readonly repository: SkuRepository) {}
 
   async list() {
@@ -55,7 +57,16 @@ export class SkuService {
     return withoutRow(found);
   }
 
-  async create(input: unknown) {
+  create(input: unknown) {
+    const operation = this.creationQueue.then(() => this.createOnce(input));
+    this.creationQueue = operation.then(
+      () => undefined,
+      () => undefined,
+    );
+    return operation;
+  }
+
+  private async createOnce(input: unknown) {
     const { oem, ...details } = createSkuRequestSchema.parse(input);
     const [skus, inventory] = await Promise.all([
       this.repository.listSkus(),
@@ -67,7 +78,7 @@ export class SkuService {
       itemDescription: details.itemDescription.toUpperCase(),
     };
 
-    await this.repository.appendSku(sku);
+    await this.repository.appendSku(sku, oem);
     await this.repository.appendInventory(sku, inventory.length + 2);
 
     return sku;
@@ -89,7 +100,7 @@ export class SkuService {
     if (!existing)
       throw new AppError(404, "SKU_NOT_FOUND", `SKU ${skuCode} was not found`);
 
-    await this.repository.updateSku(existing.rowNumber, sku);
+    await this.repository.updateSku(existing.rowNumber, sku, existing.oem);
     const inventoryRecord = inventory.find((item) => item.sku === skuCode);
     if (inventoryRecord) {
       await this.repository.updateInventoryIdentity(
@@ -117,6 +128,7 @@ export class SkuService {
       existing.rowNumber,
       inventoryRecord?.rowNumber,
       withoutRow(existing),
+      existing.oem,
     );
     return { sku: skuCode };
   }

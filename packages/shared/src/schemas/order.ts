@@ -37,6 +37,26 @@ export const createOrderRequestSchema = z.object({
     .max(200),
 });
 
+export const updateOrderRequestSchema = createOrderRequestSchema.extend({
+  items: z
+    .array(
+      z
+        .object({
+          orderLineId: z.string().trim().min(1).optional(),
+          sku: skuCodeSchema,
+          cartons: z.number().positive().max(1_000_000).optional(),
+          totalQuantity: z.number().positive().max(1_000_000_000).optional(),
+        })
+        .refine(
+          (value) =>
+            value.cartons !== undefined || value.totalQuantity !== undefined,
+          "Enter cartons or total quantity",
+        ),
+    )
+    .min(1)
+    .max(200),
+});
+
 export const orderLineSchema = z.object({
   orderLineId: z.string(),
   sku: skuCodeSchema,
@@ -83,5 +103,6 @@ export const orderResponseSchema = z.object({ data: orderSchema });
 export const orderListResponseSchema = z.object({ data: z.array(orderSchema) });
 
 export type CreateOrderRequest = z.input<typeof createOrderRequestSchema>;
+export type UpdateOrderRequest = z.input<typeof updateOrderRequestSchema>;
 export type Order = z.infer<typeof orderSchema>;
 export type OrderLine = z.infer<typeof orderLineSchema>;

@@ -95,6 +95,7 @@ QA_LOG_SHEET_NAME=QA LOG
 ORDER_ALLOCATIONS_SHEET_NAME=ORDER ALLOCATIONS
 SUPPLIER_REQUESTS_SHEET_NAME=SUPPLIER REQUESTS
 WHATSAPP_LOG_SHEET_NAME=WHATSAPP LOG
+CLIENT_ORDER_LINKS_SHEET_NAME=CLIENT ORDER LINKS
 GOOGLE_SHEETS_TIMEOUT_MS=10000
 GOOGLE_SHEETS_RETRY_ATTEMPTS=4
 GOOGLE_SHEETS_RETRY_BASE_DELAY_MS=500
@@ -108,7 +109,10 @@ FOLLOW_UP_POLL_MINUTES=60
 
 SESSION_SECRET=REPLACE_WITH_FIRST_64_CHARACTER_HEX_VALUE
 TOKEN_ENCRYPTION_KEY=REPLACE_WITH_SECOND_64_CHARACTER_HEX_VALUE
+PUBLIC_SKU_FORM_TOKEN=REPLACE_WITH_THIRD_64_CHARACTER_HEX_VALUE
 ```
+
+Generate `PUBLIC_SKU_FORM_TOKEN` with a third `openssl rand -hex 32` command. Keep it unchanged across deployments because changing it takes down the permanent mobile SKU form link. The customer-specific order links are signed using `SESSION_SECRET`, so changing `SESSION_SECRET` also invalidates every existing client order link.
 
 Do not define `PORT`; Railway supplies it and the API reads it automatically. `VITE_API_BASE_URL` is also unnecessary in production because the compiled frontend uses the same-origin `/api` default.
 

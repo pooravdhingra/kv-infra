@@ -29,6 +29,7 @@ export interface OrderRepository {
     title: string,
     values: unknown[][],
   ): Promise<{ sheetId: number; title: string }>;
+  update(title: string, values: unknown[][]): Promise<void>;
   updateStockCheck(title: string, items: OrderLine[]): Promise<void>;
   updateSkuPackingDetails(updates: OrderSkuPackingUpdate[]): Promise<void>;
   completeOrder(
@@ -93,6 +94,15 @@ export class GoogleSheetsOrderRepository implements OrderRepository {
       ORDER_HEADERS.length,
     );
     return created;
+  }
+
+  async update(title: string, values: unknown[][]) {
+    const escaped = title.replaceAll("'", "''");
+    await this.sheets.updateRange(
+      spreadsheetId(),
+      `'${escaped}'!A2:W${values.length + 1}`,
+      values,
+    );
   }
 
   async updateStockCheck(title: string, items: OrderLine[]) {

@@ -8,6 +8,7 @@ import {
   orderSchema,
   skuCodeSchema,
   shipInventoryTransition,
+  updateOrderRequestSchema,
   type InventoryItem,
   type Order,
   type OrderLine,
@@ -146,6 +147,7 @@ const stockLine = (
 
 export class OrderService {
   private readonly completedRequests = new Map<string, Order>();
+  private creationQueue: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly repository: OrderRepository,
@@ -193,7 +195,18 @@ export class OrderService {
     return updates.length;
   }
 
-  async create(input: unknown, idempotencyKey?: string) {
+  create(input: unknown, idempotencyKey?: string) {
+    const operation = this.creationQueue.then(() =>
+      this.createOnce(input, idempotencyKey),
+    );
+    this.creationQueue = operation.then(
+      () => undefined,
+      () => undefined,
+    );
+    return operation;
+  }
+
+  private async createOnce(input: unknown, idempotencyKey?: string) {
     if (idempotencyKey && this.completedRequests.has(idempotencyKey)) {
       return this.completedRequests.get(idempotencyKey)!;
     }
@@ -317,6 +330,155 @@ export class OrderService {
     });
     if (idempotencyKey) this.completedRequests.set(idempotencyKey, order);
     return order;
+  }
+
+  async update(orderId: string, input: unknown) {
+    const request = updateOrderRequestSchema.parse(input);
+    const current = await this.get(orderId);
+    if (current.status === "COMPLETED")
+      throw new AppError(
+        409,
+        "ORDER_COMPLETED",
+        `${orderId} has already been shipped`,
+      );
+
+    const existingById = new Map(
+      current.items.map((item) => [item.orderLineId, item]),
+    );
+    const submittedExistingIds = request.items.flatMap((item) =>
+      item.orderLineId ? [item.orderLineId] : [],
+    );
+    if (new Set(submittedExistingIds).size !== submittedExistingIds.length)
+      throw new AppError(
+        400,
+        "DUPLICATE_ORDER_LINE",
+        "Each existing order line may only appear once",
+      );
+    const omittedLine = current.items.find(
+      (item) => !submittedExistingIds.includes(item.orderLineId),
+    );
+    if (omittedLine)
+      throw new AppError(
+        409,
+        "ORDER_LINE_REMOVAL_NOT_ALLOWED",
+        `Existing order line ${omittedLine.orderLineId} cannot be removed`,
+      );
+
+    const [skuRecords, inventory] = await Promise.all([
+      this.skuRepository.listSkus(),
+      this.inventoryService.list(),
+    ]);
+    const skuMap = new Map(
+      skuRecords
+        .filter((sku) => !sku.sku.startsWith("DELETED-"))
+        .map((sku) => [sku.sku, sku]),
+    );
+    const inventoryMap = new Map(inventory.map((item) => [item.sku, item]));
+    const usedLineIds = new Set(current.items.map((item) => item.orderLineId));
+    let nextLineNumber = current.items.reduce((highest, item) => {
+      const match = /-L(\d+)$/.exec(item.orderLineId);
+      return match ? Math.max(highest, Number(match[1])) : highest;
+    }, 0);
+    const nextLineId = () => {
+      let candidate: string;
+      do {
+        nextLineNumber += 1;
+        candidate = `${orderId}-L${String(nextLineNumber).padStart(3, "0")}`;
+      } while (usedLineIds.has(candidate));
+      usedLineIds.add(candidate);
+      return candidate;
+    };
+
+    const items = request.items.map((requested) => {
+      const existing = requested.orderLineId
+        ? existingById.get(requested.orderLineId)
+        : undefined;
+      if (requested.orderLineId && !existing)
+        throw new AppError(
+          400,
+          "UNKNOWN_ORDER_LINE",
+          `Order line ${requested.orderLineId} does not belong to ${orderId}`,
+        );
+      if (existing && existing.sku !== requested.sku)
+        throw new AppError(
+          409,
+          "ORDER_LINE_SKU_LOCKED",
+          `SKU cannot be changed for existing order line ${existing.orderLineId}`,
+        );
+      const sku = skuMap.get(requested.sku);
+      if (!sku)
+        throw new AppError(
+          400,
+          "UNKNOWN_SKU",
+          `SKU ${requested.sku} is not active`,
+        );
+      const hasCartonQuantity = sku.quantityPerCarton > 0;
+      if (!hasCartonQuantity && requested.totalQuantity === undefined)
+        throw new AppError(
+          400,
+          "TOTAL_QUANTITY_REQUIRED",
+          `Enter T-QTY for ${sku.sku} because Quantity / CTN is missing`,
+        );
+      const cartons = hasCartonQuantity
+        ? (requested.cartons ??
+          calculateCartonsFromTotalQuantity(
+            requested.totalQuantity!,
+            sku.quantityPerCarton,
+          ))
+        : 0;
+      const totals = hasCartonQuantity
+        ? calculateOrderLineTotals({ ...sku, cartons })
+        : {
+            totalQuantity: requested.totalQuantity!,
+            grossWeight: 0,
+            volume: 0,
+          };
+      const reservedQuantity = existing?.reservedQuantity ?? 0;
+      if (totals.totalQuantity < reservedQuantity)
+        throw new AppError(
+          409,
+          "ORDER_QUANTITY_BELOW_RESERVED",
+          `Quantity for ${sku.sku} cannot be lower than its reserved quantity of ${reservedQuantity}`,
+        );
+      return stockLine(
+        {
+          orderLineId: existing?.orderLineId ?? nextLineId(),
+          sku: sku.sku,
+          itemDescription: sku.itemDescription,
+          quantityPerCarton: sku.quantityPerCarton,
+          unit: sku.unit,
+          cartons,
+          ...totals,
+          weightPerCarton: sku.weightPerCarton,
+          length: sku.length,
+          breadth: sku.breadth,
+          height: sku.height,
+          reservedQuantity,
+          supplierRequestStatus: existing?.supplierRequestStatus ?? null,
+        },
+        inventoryMap.get(sku.sku),
+      );
+    });
+    const timestamp = new Date().toISOString();
+    await this.repository.update(
+      current.sheetTitle,
+      this.orderRows(
+        orderId,
+        request.customerName,
+        request.dateReceived,
+        request.orderNotes,
+        items,
+        timestamp,
+      ),
+    );
+    return orderSchema.parse({
+      ...current,
+      customerName: request.customerName,
+      dateReceived: request.dateReceived,
+      orderNotes: request.orderNotes,
+      ...this.totals(items),
+      items,
+    });
   }
 
   async list() {
@@ -656,5 +818,43 @@ export class OrderService {
       grossWeight: sum((item) => item.grossWeight),
       volume: sum((item) => item.volume),
     };
+  }
+
+  private orderRows(
+    orderId: string,
+    customerName: string,
+    dateReceived: string,
+    orderNotes: string,
+    items: OrderLine[],
+    timestamp: string,
+  ) {
+    return items.map((item, index) => {
+      const row = index + 2;
+      return [
+        item.sku,
+        item.itemDescription,
+        item.quantityPerCarton,
+        item.unit,
+        item.cartons || "",
+        item.quantityPerCarton > 0 ? `=E${row}*C${row}` : item.totalQuantity,
+        item.weightPerCarton,
+        item.quantityPerCarton > 0 ? `=E${row}*G${row}` : "",
+        item.quantityPerCarton > 0 ? orderVolumeFormula(row) : "",
+        displayStatuses[item.stockStatus],
+        item.length,
+        item.breadth,
+        item.height,
+        orderId,
+        item.orderLineId,
+        dateReceived,
+        `=F${row}`,
+        item.reservedQuantity,
+        item.shortfallQuantity,
+        item.supplierRequestStatus ?? "",
+        timestamp,
+        orderNotes,
+        customerName,
+      ];
+    });
   }
 }

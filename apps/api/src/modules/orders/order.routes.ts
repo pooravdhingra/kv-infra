@@ -24,6 +24,12 @@ export const createOrderRouter = (
     response.json({ data: await service.get(String(request.params.orderId)) });
   });
 
+  router.put("/:orderId", async (request, response) => {
+    response.json({
+      data: await service.update(String(request.params.orderId), request.body),
+    });
+  });
+
   router.post("/:orderId/stock-check", async (request, response) => {
     response.json({
       data: await service.stockCheck(String(request.params.orderId)),

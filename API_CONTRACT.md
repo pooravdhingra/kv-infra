@@ -27,6 +27,7 @@ All endpoints use JSON under `/api`. Successful responses use `{ "data": ... }`;
 | GET    | `/api/orders`                                  | List orders represented by valid order tabs          |
 | POST   | `/api/orders`                                  | Create an order tab and run its first stock check    |
 | GET    | `/api/orders/:orderId`                         | Read an order and its current stock position         |
+| PUT    | `/api/orders/:orderId`                         | Edit a pending order and append new order lines      |
 | POST   | `/api/orders/:orderId/stock-check`             | Refresh stock state in the response and order tab    |
 | POST   | `/api/orders/:orderId/ship`                    | Complete a fully reserved order                      |
 | POST   | `/api/receiving`                               | Log a receipt and increase unpacked inventory        |
@@ -55,8 +56,20 @@ All endpoints use JSON under `/api`. Successful responses use `{ "data": ... }`;
 | POST   | `/api/whatsapp/disconnect`                     | Log out and remove the saved linked-device session   |
 | GET    | `/api/whatsapp/qr`                             | Return the current pairing QR payload                |
 | POST   | `/api/whatsapp/send`                           | Send and append-log a direct text message            |
+| GET    | `/api/client-order-links`                      | List customer-specific public order links            |
+| POST   | `/api/client-order-links`                      | Create a signed single-submit order link             |
+| POST   | `/api/client-order-links/:id/disable`          | Take down a public order link                        |
+| GET    | `/api/client-order-links/public-tools`         | Read the configured permanent SKU form URL           |
+| GET    | `/api/public/orders/:token`                    | Open a client form or submitted order summary        |
+| POST   | `/api/public/orders/:token`                    | Submit the customer order once                       |
+| GET    | `/api/public/sku-form/:token`                  | Validate access to the permanent SKU form            |
+| POST   | `/api/public/sku-form/:token`                  | Create an SKU through the permanent private link     |
 
-Except for health and the three auth endpoints, every API route requires a valid signed session cookie. Login accepts `{ "role": "OPERATOR" | "OWNER", "password": "..." }`. Passwords remain server-side environment secrets. Sessions last 12 hours by default and use a signed, HttpOnly, SameSite cookie; the cookie is marked Secure when `APP_BASE_URL` uses HTTPS. Only the `AUTH_REQUIRED` error code indicates that this application session has expired; a 401 from Google or another integration must be shown as an integration error without signing the operator out. Five consecutive failures from one client temporarily lock further attempts for five minutes. Operator and Owner currently have the same application access, but the role is retained in the session for later authorization rules.
+Except for health, the three auth endpoints, and the four `/api/public/*` capability endpoints, every API route requires a valid signed session cookie. Public order URLs contain an HMAC signature derived from `SESSION_SECRET`; the signature is never stored in Sheets, a link submits at most one order, and completed or explicitly disabled links return HTTP 410. The permanent SKU endpoint requires the exact `PUBLIC_SKU_FORM_TOKEN`. Login accepts `{ "role": "OPERATOR" | "OWNER", "password": "..." }`. Passwords remain server-side environment secrets. Sessions last 12 hours by default and use a signed, HttpOnly, SameSite cookie; the cookie is marked Secure when `APP_BASE_URL` uses HTTPS. Only the `AUTH_REQUIRED` error code indicates that this application session has expired; a 401 from Google or another integration must be shown as an integration error without signing the operator out. Five consecutive failures from one client temporarily lock further attempts for five minutes. Operator and Owner currently have the same application access, but the role is retained in the session for later authorization rules.
+
+### Public order links
+
+Authenticated operators create links with `{ "customerName": "ABC Traders" }`. The link fixes and uppercases that customer identity. While open, its public endpoint returns the active SKU catalogue needed by the order editor. Submission accepts only `orderNotes` and the normal order `items`; the server supplies customer and operator-local date. After the first successful submission, GET and repeat POST requests return a restricted packing-list-style summary rather than creating another order. Internal stock, supplier, allocation, and Google Sheet fields are never exposed. Shipment or explicit disablement makes the public URL unavailable.
 
 Google OAuth callback persistence failures return `GOOGLE_TOKEN_STORAGE_FAILED` with a safe filesystem code and configuration guidance. Local development uses `.secrets/google-oauth.json`; Railway uses `/data/google-oauth.json` on the attached persistent volume.
 
@@ -110,6 +123,8 @@ All quantities are deltas. At least one quantity or the location must change, qu
 ```
 
 Each item requires an active SKU. When its SKU has a positive Quantity/CTN, send `cartons`; the operator may edit Cartons or T-QTY in the UI and the other value is derived. When Quantity/CTN is missing, send a direct quantity instead: `{ "sku": "KV-X000001", "totalQuantity": 7500 }`. That provisional order line has no carton count until packing records a positive Quantity/CTN and synchronizes the latest SKU measurements into matching pending orders. `POST /api/orders` accepts `Idempotency-Key`, generates `ORD-YYYY-NNNN`, creates a readable order tab, fills calculated fields, and reports `READY_TO_RESERVE`, `NEEDS_PACKING`, `NEEDS_SUPPLIER`, or `FULLY_RESERVED` for each line. A fully reserved line always has zero remaining quantity, zero shortfall, and no supplier action. Order reads derive reserved quantity from the append-only allocation ledger. The stock-check endpoint recalculates against current Inventory and repairs the order tab's reserved quantity, status, shortfall, and timestamp cells without assigning additional stock.
+
+Authenticated operators may edit pending orders with `PUT /api/orders/:orderId`. Existing lines retain their order-line IDs and SKU identities, cannot be removed, and cannot be reduced below their reserved quantity; new lines receive the next order-line ID. Customer name, date, notes, cartons, and total quantity may be corrected. Shipped orders reject edits. A client capability link never exposes this mutation: after client submission it remains a read-only summary, including any later operator corrections.
 
 Order-line responses also expose `reservedQuantity`, `remainingQuantity`, supplier-request state, one pure-function-derived suggested action, and valid alternatives. Suggested actions are `RESERVE_STOCK`, `START_PACKING`, `REQUEST_SUPPLIER`, `MARK_RECEIVED`, or `NO_ACTION`; receiving is available as an alternative while demand remains.
 

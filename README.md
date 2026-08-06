@@ -4,7 +4,7 @@ A lightweight operator dashboard over the company's existing Google Sheets and W
 
 ## Current status
 
-Phases 0–12 are implemented: product contracts, Google OAuth/Sheets connection, SKU master, inventory, orders, receiving, packing/QA, direct allocation and cancellation, supplier requests, persisted Baileys WhatsApp connection, guarded three-day follow-ups, and the prioritized operator dashboard.
+Phases 0–12 are implemented: product contracts, Google OAuth/Sheets connection, SKU master, inventory, orders, receiving, packing/QA, direct allocation and cancellation, supplier requests, persisted Baileys WhatsApp connection, guarded three-day follow-ups, the prioritized operator dashboard, signed client order links, and a permanent private mobile SKU form.
 
 ## Requirements
 
