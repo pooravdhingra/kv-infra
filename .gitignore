@@ -14,3 +14,4 @@ google-token.json
 .secrets/
 *.pem
 *.key
+data/
