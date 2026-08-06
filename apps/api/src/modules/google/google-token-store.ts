@@ -36,6 +36,24 @@ export interface TokenStore {
   delete(): Promise<void>;
 }
 
+const tokenFileError = (
+  operation: "read" | "write" | "delete",
+  error: unknown,
+) => {
+  const code = (error as NodeJS.ErrnoException).code;
+  return new AppError(
+    503,
+    "GOOGLE_TOKEN_STORAGE_FAILED",
+    `Could not ${operation} the encrypted Google token file`,
+    {
+      operation,
+      ...(code ? { fileSystemCode: code } : {}),
+      resolution:
+        "Use a writable GOOGLE_TOKEN_FILE path such as .secrets/google-oauth.json locally or /data/google-oauth.json on Railway",
+    },
+  );
+};
+
 const encryptionKey = () => {
   if (env.TOKEN_ENCRYPTION_KEY.length < 32) {
     throw new AppError(
@@ -49,9 +67,13 @@ const encryptionKey = () => {
 };
 
 export class EncryptedFileTokenStore implements TokenStore {
-  private readonly filePath = isAbsolute(env.GOOGLE_TOKEN_FILE)
-    ? env.GOOGLE_TOKEN_FILE
-    : resolve(projectRoot, env.GOOGLE_TOKEN_FILE);
+  private readonly filePath: string;
+
+  constructor(filePath = env.GOOGLE_TOKEN_FILE) {
+    this.filePath = isAbsolute(filePath)
+      ? filePath
+      : resolve(projectRoot, filePath);
+  }
 
   async exists() {
     return (await this.read()) !== null;
@@ -63,7 +85,7 @@ export class EncryptedFileTokenStore implements TokenStore {
       contents = await readFile(this.filePath, "utf8");
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
-      throw error;
+      throw tokenFileError("read", error);
     }
 
     const encrypted = encryptedFileSchema.parse(JSON.parse(contents));
@@ -96,18 +118,23 @@ export class EncryptedFileTokenStore implements TokenStore {
       ciphertext: ciphertext.toString("base64"),
     };
 
-    await mkdir(dirname(this.filePath), { recursive: true, mode: 0o700 });
-    await writeFile(this.filePath, JSON.stringify(payload), {
-      encoding: "utf8",
-      mode: 0o600,
-    });
+    try {
+      await mkdir(dirname(this.filePath), { recursive: true, mode: 0o700 });
+      await writeFile(this.filePath, JSON.stringify(payload), {
+        encoding: "utf8",
+        mode: 0o600,
+      });
+    } catch (error) {
+      throw tokenFileError("write", error);
+    }
   }
 
   async delete() {
     try {
       await unlink(this.filePath);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+        throw tokenFileError("delete", error);
     }
   }
 }

@@ -49,6 +49,20 @@ export const normalizeWhatsAppJid = (
 // Signal decryption, avoiding stale-session Bad MAC loops.
 export const ignoreIncomingWhatsAppJid = (_jid: string) => true;
 
+const whatsappAuthStorageError = (error: unknown) => {
+  const code = (error as NodeJS.ErrnoException).code;
+  return new AppError(
+    503,
+    "WHATSAPP_AUTH_STORAGE_FAILED",
+    "Could not initialize the WhatsApp linked-device credential directory",
+    {
+      ...(code ? { fileSystemCode: code } : {}),
+      resolution:
+        "Use a writable BAILEYS_AUTH_DIR such as .secrets/baileys-auth locally or /data/baileys-auth on Railway",
+    },
+  );
+};
+
 export class BaileysWhatsAppAdapter implements WhatsAppAdapter {
   private socket: WASocket | null = null;
   private connectionStatus: WhatsAppConnectionStatus = "DISCONNECTED";
@@ -57,6 +71,10 @@ export class BaileysWhatsAppAdapter implements WhatsAppAdapter {
   private lastError: string | null = null;
   private connecting: Promise<void> | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
+
+  constructor(
+    private readonly configuredAuthDirectory = env.BAILEYS_AUTH_DIR,
+  ) {}
 
   status() {
     return {
@@ -77,7 +95,9 @@ export class BaileysWhatsAppAdapter implements WhatsAppAdapter {
   }
 
   private authDirectory() {
-    return path.resolve(projectRoot, env.BAILEYS_AUTH_DIR);
+    return path.isAbsolute(this.configuredAuthDirectory)
+      ? this.configuredAuthDirectory
+      : path.resolve(projectRoot, this.configuredAuthDirectory);
   }
 
   async connect() {
@@ -100,9 +120,16 @@ export class BaileysWhatsAppAdapter implements WhatsAppAdapter {
   private async createSocket() {
     this.connectionStatus = "CONNECTING";
     this.lastError = null;
-    const { state, saveCreds } = await useMultiFileAuthState(
-      this.authDirectory(),
-    );
+    let authState: Awaited<ReturnType<typeof useMultiFileAuthState>>;
+    try {
+      authState = await useMultiFileAuthState(this.authDirectory());
+    } catch (error) {
+      const storageError = whatsappAuthStorageError(error);
+      this.connectionStatus = "DISCONNECTED";
+      this.lastError = storageError.message;
+      throw storageError;
+    }
+    const { state, saveCreds } = authState;
     const socket = makeWASocket({
       auth: state,
       browser: Browsers.macOS("KV Operations OS"),
@@ -113,7 +140,11 @@ export class BaileysWhatsAppAdapter implements WhatsAppAdapter {
       shouldIgnoreJid: ignoreIncomingWhatsAppJid,
     });
     this.socket = socket;
-    socket.ev.on("creds.update", saveCreds);
+    socket.ev.on("creds.update", () => {
+      void saveCreds().catch((error: unknown) => {
+        this.lastError = whatsappAuthStorageError(error).message;
+      });
+    });
     socket.ev.on("connection.update", (update) => {
       if (update.qr) {
         this.currentQr = update.qr;

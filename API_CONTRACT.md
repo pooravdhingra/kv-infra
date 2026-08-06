@@ -55,7 +55,11 @@ All endpoints use JSON under `/api`. Successful responses use `{ "data": ... }`;
 | GET    | `/api/whatsapp/qr`                             | Return the current pairing QR payload                |
 | POST   | `/api/whatsapp/send`                           | Send and append-log a direct text message            |
 
-Except for health and the three auth endpoints, every API route requires a valid signed session cookie. Login accepts `{ "role": "OPERATOR" | "OWNER", "password": "..." }`. Passwords remain server-side environment secrets. Sessions last 12 hours by default and use a signed, HttpOnly, SameSite cookie; production cookies also require HTTPS. Five consecutive failures from one client temporarily lock further attempts for five minutes. Operator and Owner currently have the same application access, but the role is retained in the session for later authorization rules.
+Except for health and the three auth endpoints, every API route requires a valid signed session cookie. Login accepts `{ "role": "OPERATOR" | "OWNER", "password": "..." }`. Passwords remain server-side environment secrets. Sessions last 12 hours by default and use a signed, HttpOnly, SameSite cookie; the cookie is marked Secure when `APP_BASE_URL` uses HTTPS. Only the `AUTH_REQUIRED` error code indicates that this application session has expired; a 401 from Google or another integration must be shown as an integration error without signing the operator out. Five consecutive failures from one client temporarily lock further attempts for five minutes. Operator and Owner currently have the same application access, but the role is retained in the session for later authorization rules.
+
+Google OAuth callback persistence failures return `GOOGLE_TOKEN_STORAGE_FAILED` with a safe filesystem code and configuration guidance. Local development uses `.secrets/google-oauth.json`; Railway uses `/data/google-oauth.json` on the attached persistent volume.
+
+WhatsApp connection setup failures caused by an invalid credential path return `WHATSAPP_AUTH_STORAGE_FAILED` with safe configuration guidance. Local development uses `.secrets/baileys-auth`; Railway uses `/data/baileys-auth` on the attached persistent volume.
 
 ### SKU request
 

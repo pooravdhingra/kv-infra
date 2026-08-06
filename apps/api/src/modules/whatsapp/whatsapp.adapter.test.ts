@@ -1,9 +1,24 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  BaileysWhatsAppAdapter,
   ignoreIncomingWhatsAppJid,
   normalizeWhatsAppJid,
 } from "./whatsapp.adapter.js";
+
+const temporaryDirectories: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryDirectories
+      .splice(0)
+      .map((directory) => rm(directory, { recursive: true, force: true })),
+  );
+});
 
 describe("normalizeWhatsAppJid", () => {
   it("adds the configured country code to a local ten-digit number", () => {
@@ -24,5 +39,27 @@ describe("normalizeWhatsAppJid", () => {
   it("ignores inbound chats because the integration is outbound-only", () => {
     expect(ignoreIncomingWhatsAppJid("919810525118@s.whatsapp.net")).toBe(true);
     expect(ignoreIncomingWhatsAppJid("120363000000000000@g.us")).toBe(true);
+  });
+
+  it("returns an actionable error for an invalid credential directory", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "kv-whatsapp-auth-"));
+    temporaryDirectories.push(directory);
+    const blockingFile = join(directory, "not-a-directory");
+    await writeFile(blockingFile, "blocked");
+    const adapter = new BaileysWhatsAppAdapter(
+      join(blockingFile, "baileys-auth"),
+    );
+
+    await expect(adapter.connect()).rejects.toMatchObject({
+      status: 503,
+      code: "WHATSAPP_AUTH_STORAGE_FAILED",
+    });
+    expect(adapter.status()).toMatchObject({
+      status: "DISCONNECTED",
+      connected: false,
+      qrAvailable: false,
+      lastError:
+        "Could not initialize the WhatsApp linked-device credential directory",
+    });
   });
 });

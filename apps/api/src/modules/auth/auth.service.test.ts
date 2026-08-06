@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { describe, expect, it, vi } from "vitest";
 
 import { AppError } from "../../lib/app-error.js";
-import { AuthService } from "./auth.service.js";
+import { AuthService, shouldUseSecureCookies } from "./auth.service.js";
 import { requireAuthentication } from "./auth.routes.js";
 
 const service = () =>
@@ -15,6 +15,11 @@ const service = () =>
   });
 
 describe("AuthService", () => {
+  it("only marks cookies secure when the public app URL uses HTTPS", () => {
+    expect(shouldUseSecureCookies("http://localhost:4000")).toBe(false);
+    expect(shouldUseSecureCookies("https://crm.example.com")).toBe(true);
+  });
+
   it("creates and verifies separate role sessions", () => {
     const auth = service();
     const operator = auth.login({

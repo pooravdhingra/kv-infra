@@ -38,6 +38,8 @@ import {
 } from "@kv-infra/shared";
 import axios, { AxiosError } from "axios";
 
+import { isAuthSessionExpired } from "../lib/auth-session";
+
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "/api",
   timeout: 60_000,
@@ -48,11 +50,13 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     const requestUrl = error.config?.url ?? "";
+    const responseCode = (
+      error.response?.data as { error?: { code?: string } } | undefined
+    )?.error?.code;
     if (
-      error.response?.status === 401 &&
-      !requestUrl.includes("/auth/login") &&
-      !requestUrl.includes("/auth/session")
+      isAuthSessionExpired(error.response?.status, responseCode, requestUrl)
     ) {
+      console.warn(`Operator session expired while requesting ${requestUrl}`);
       window.dispatchEvent(new Event("kv-auth-expired"));
     }
     return Promise.reject(error);

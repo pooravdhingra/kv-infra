@@ -31,6 +31,9 @@ const digest = (value: string) => createHash("sha256").update(value).digest();
 const safeEqual = (left: string, right: string) =>
   timingSafeEqual(digest(left), digest(right));
 
+export const shouldUseSecureCookies = (appBaseUrl: string) =>
+  new URL(appBaseUrl).protocol === "https:";
+
 const cookieValue = (rawCookie: string | undefined, name: string) =>
   (rawCookie ?? "")
     .split(";")
@@ -51,7 +54,7 @@ export class AuthService {
       ownerPassword: env.OWNER_PASSWORD || env.OPERATOR_PASSWORD,
       sessionSecret: env.SESSION_SECRET,
       sessionHours: env.AUTH_SESSION_HOURS,
-      secureCookies: env.NODE_ENV === "production",
+      secureCookies: shouldUseSecureCookies(env.APP_BASE_URL),
     },
   ) {}
 

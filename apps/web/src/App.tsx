@@ -20,6 +20,7 @@ import { NewSupplierRequestPage } from "./pages/NewSupplierRequestPage";
 import { GroupSupplierRequestsPage } from "./pages/GroupSupplierRequestsPage";
 import { AuthPage } from "./pages/AuthPage";
 import { getAuthSession, logout } from "./api/client";
+import { resolveInitialAuthSession } from "./lib/auth-session";
 
 const Workspace = ({
   session,
@@ -72,7 +73,20 @@ export const App = () => {
   useEffect(() => {
     const expire = () => setSession({ authenticated: false, role: null });
     window.addEventListener("kv-auth-expired", expire);
-    void getAuthSession().then(setSession).catch(expire);
+    void getAuthSession()
+      .then((initialSession) =>
+        setSession((current) =>
+          resolveInitialAuthSession(current, initialSession),
+        ),
+      )
+      .catch(() =>
+        setSession((current) =>
+          resolveInitialAuthSession(current, {
+            authenticated: false,
+            role: null,
+          }),
+        ),
+      );
     return () => window.removeEventListener("kv-auth-expired", expire);
   }, []);
 
@@ -87,7 +101,14 @@ export const App = () => {
     );
   }
   if (!session.authenticated) {
-    return <AuthPage onAuthenticated={setSession} />;
+    return (
+      <AuthPage
+        onAuthenticated={(authenticatedSession) => {
+          window.history.replaceState(null, "", "/");
+          setSession(authenticatedSession);
+        }}
+      />
+    );
   }
   return (
     <Workspace

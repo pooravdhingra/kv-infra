@@ -44,6 +44,15 @@ export const requireAuthentication =
       response.locals.auth = service.requireSession(request.headers.cookie);
       next();
     } catch (error) {
+      if (request.method && request.path) {
+        console.warn("Authentication rejected", {
+          method: request.method,
+          path: request.path,
+          hasSessionCookie: (request.headers.cookie ?? "")
+            .split(";")
+            .some((part) => part.trim().startsWith("kv_session=")),
+        });
+      }
       next(error);
     }
   };
