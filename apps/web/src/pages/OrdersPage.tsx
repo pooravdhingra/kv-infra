@@ -45,7 +45,7 @@ export const OrdersPage = () => {
         </div>
         <div className="orders-title-actions">
           <a
-            className="secondary-button create-order-link"
+            className="secondary-button create-order-link-secondary"
             href="/orders/client-links"
           >
             Client order links

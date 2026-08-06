@@ -570,7 +570,7 @@ main {
   color: #fff;
 }
 .secondary-button {
-  background: #545454;
+  background: #e6e2d8;
   color: #34372f;
 }
 .primary-button:disabled,
@@ -769,6 +769,9 @@ main {
 }
 .create-order-link {
   color: #fff;
+  text-decoration: none;
+}
+.create-order-link-secondary {
   text-decoration: none;
 }
 .orders-title-row {
