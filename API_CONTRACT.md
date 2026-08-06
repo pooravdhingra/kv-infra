@@ -7,6 +7,9 @@ All endpoints use JSON under `/api`. Successful responses use `{ "data": ... }`;
 | Method | Path                                           | Purpose                                              |
 | ------ | ---------------------------------------------- | ---------------------------------------------------- |
 | GET    | `/api/health`                                  | Process health and version                           |
+| GET    | `/api/auth/session`                            | Read the current Operator or Owner session           |
+| POST   | `/api/auth/login`                              | Create a signed role session                         |
+| POST   | `/api/auth/logout`                             | Clear the current role session                       |
 | GET    | `/api/dashboard`                               | Prioritized operator queue and overview              |
 | GET    | `/api/google/status`                           | Configuration and local token status                 |
 | GET    | `/api/google/auth-url`                         | Signed Google OAuth authorization URL                |
@@ -51,6 +54,8 @@ All endpoints use JSON under `/api`. Successful responses use `{ "data": ... }`;
 | POST   | `/api/whatsapp/connect`                        | Start or restore the WhatsApp connection             |
 | GET    | `/api/whatsapp/qr`                             | Return the current pairing QR payload                |
 | POST   | `/api/whatsapp/send`                           | Send and append-log a direct text message            |
+
+Except for health and the three auth endpoints, every API route requires a valid signed session cookie. Login accepts `{ "role": "OPERATOR" | "OWNER", "password": "..." }`. Passwords remain server-side environment secrets. Sessions last 12 hours by default and use a signed, HttpOnly, SameSite cookie; production cookies also require HTTPS. Five consecutive failures from one client temporarily lock further attempts for five minutes. Operator and Owner currently have the same application access, but the role is retained in the session for later authorization rules.
 
 ### SKU request
 
@@ -171,7 +176,3 @@ The grouped review UI submits approved drafts to `/api/supplier-requests/bulk`. 
 ## Google Sheets retry behavior
 
 Google Sheets calls use a per-attempt timeout and bounded exponential backoff for timeouts and transient Google responses. The default policy is four attempts. Ordinary transient failures start at 500 ms; quota responses use longer waits starting at 5 seconds, and both add randomized jitter. Validation and sheet-contract errors are never retried. Concurrent same-workbook reads are combined into one batch request, identical in-flight reads are shared, and successful reads use a 15-second cache. Every application write invalidates row data immediately; the order-tab list is invalidated only when a tab is created. The web client allows enough time for the API retry window and keeps the initiating button visibly busy during the operation.
-
-## Planned endpoints
-
-- Auth: `POST /auth/login`, `POST /auth/logout`, `GET /auth/session`

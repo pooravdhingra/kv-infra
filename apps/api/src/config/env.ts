@@ -16,6 +16,11 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   APP_BASE_URL: z.string().url().default("http://localhost:4000"),
   FRONTEND_URL: z.string().url().default("http://localhost:5173"),
+  OPERATOR_USERNAME: z.string().trim().min(1).default("operator"),
+  OPERATOR_PASSWORD: z.string().default(""),
+  OWNER_USERNAME: z.string().trim().min(1).default("owner"),
+  OWNER_PASSWORD: z.string().default(""),
+  AUTH_SESSION_HOURS: z.coerce.number().int().min(1).max(168).default(12),
   GOOGLE_CLIENT_ID: z.string().default(""),
   GOOGLE_CLIENT_SECRET: z.string().default(""),
   GOOGLE_REDIRECT_URI: z

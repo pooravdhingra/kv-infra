@@ -3,6 +3,7 @@ import {
   googleConnectionTestSchema,
   googleStatusSchema,
   dashboardResponseSchema,
+  authSessionResponseSchema,
   healthResponseSchema,
   inventoryItemResponseSchema,
   inventoryListResponseSchema,
@@ -33,13 +34,30 @@ import {
   type ManualInventoryAdjustment,
   type StartPackingRequest,
   type UpdateSkuRequest,
+  type AuthRole,
 } from "@kv-infra/shared";
 import axios, { AxiosError } from "axios";
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "/api",
   timeout: 60_000,
+  withCredentials: true,
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    const requestUrl = error.config?.url ?? "";
+    if (
+      error.response?.status === 401 &&
+      !requestUrl.includes("/auth/login") &&
+      !requestUrl.includes("/auth/session")
+    ) {
+      window.dispatchEvent(new Event("kv-auth-expired"));
+    }
+    return Promise.reject(error);
+  },
+);
 
 export const apiErrorMessage = (error: unknown) => {
   if (error instanceof AxiosError) {
@@ -55,6 +73,17 @@ export const getHealth = async () => {
   const response = await api.get("/health");
   return healthResponseSchema.parse(response.data);
 };
+
+export const getAuthSession = async () =>
+  authSessionResponseSchema.parse((await api.get("/auth/session")).data).data;
+
+export const login = async (role: AuthRole, password: string) =>
+  authSessionResponseSchema.parse(
+    (await api.post("/auth/login", { role, password })).data,
+  ).data;
+
+export const logout = async () =>
+  authSessionResponseSchema.parse((await api.post("/auth/logout")).data).data;
 
 export const getDashboard = async () =>
   dashboardResponseSchema.parse((await api.get("/dashboard")).data).data;

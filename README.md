@@ -19,7 +19,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. The API runs at `http://localhost:4000`; its health check is `GET /api/health`.
+Set the Operator and Owner credentials in the ignored `.env`, then open `http://localhost:5173` and sign in. The API runs at `http://localhost:4000`; its health check is `GET /api/health`. Both roles currently open the same workspace.
 
 ## Commands
 
@@ -45,4 +45,6 @@ Read `AGENTS.md` before changing code and the relevant root contract before impl
 
 For Google Cloud, secrets, spreadsheet preparation, and end-to-end testing, follow [`ENVIRONMENT_SETUP.md`](./ENVIRONMENT_SETUP.md).
 
-WhatsApp credentials are stored only in the ignored local directory configured by `BAILEYS_AUTH_DIR`. Connect the operator account from Settings before sending supplier requests.
+For the single-service production container, Railway volume, GitHub deployment workflow, hosted Google callback, and WhatsApp pairing, follow [`RAILWAY_DEPLOYMENT.md`](./RAILWAY_DEPLOYMENT.md).
+
+WhatsApp credentials are stored only in the ignored local directory or mounted production volume configured by `BAILEYS_AUTH_DIR`. Connect the operator account from Settings before sending supplier requests.

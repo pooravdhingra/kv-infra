@@ -44,6 +44,11 @@ export const normalizeWhatsAppJid = (
   return `${digits}@s.whatsapp.net`;
 };
 
+// This integration sends supplier messages but does not read operator chats.
+// Ignoring inbound JIDs makes Baileys acknowledge them without attempting
+// Signal decryption, avoiding stale-session Bad MAC loops.
+export const ignoreIncomingWhatsAppJid = (_jid: string) => true;
+
 export class BaileysWhatsAppAdapter implements WhatsAppAdapter {
   private socket: WASocket | null = null;
   private connectionStatus: WhatsAppConnectionStatus = "DISCONNECTED";
@@ -104,6 +109,8 @@ export class BaileysWhatsAppAdapter implements WhatsAppAdapter {
       logger: pino({ level: "silent" }),
       markOnlineOnConnect: false,
       syncFullHistory: false,
+      shouldSyncHistoryMessage: () => false,
+      shouldIgnoreJid: ignoreIncomingWhatsAppJid,
     });
     this.socket = socket;
     socket.ev.on("creds.update", saveCreds);

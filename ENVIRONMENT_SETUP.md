@@ -2,6 +2,8 @@
 
 This guide configures Phases 2–11 locally without committing credentials or business data.
 
+For hosted production setup, use [`RAILWAY_DEPLOYMENT.md`](./RAILWAY_DEPLOYMENT.md). Do not reuse local session secrets or upload local Google and Baileys credential files to the hosted service.
+
 ## 1. Create the local environment file
 
 From the repository root:
@@ -113,6 +115,12 @@ APP_BASE_URL=http://localhost:4000
 FRONTEND_URL=http://localhost:5173
 VITE_API_BASE_URL=/api
 
+OPERATOR_USERNAME=operator
+OPERATOR_PASSWORD=your-local-operator-password
+OWNER_USERNAME=owner
+OWNER_PASSWORD=your-local-owner-password
+AUTH_SESSION_HOURS=12
+
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
 GOOGLE_REDIRECT_URI=http://localhost:4000/api/google/callback
@@ -143,11 +151,15 @@ SESSION_SECRET=first-generated-random-value
 TOKEN_ENCRYPTION_KEY=second-generated-random-value
 ```
 
+Keep both passwords only in the ignored local `.env`. If `OWNER_PASSWORD` is blank, Owner temporarily uses the Operator password while still receiving an `OWNER` session. Set a distinct Owner password before sharing Owner access. `SESSION_SECRET` must contain at least 32 characters because it signs both application sessions and Google OAuth state.
+
 Keep the default sheet names unless the actual tabs intentionally use different names. Header names remain fixed regardless of tab-name configuration.
 
 The Sheets defaults coalesce and cache reads for 15 seconds, invalidate data after every application write, and retry transient failures up to four times. Keep these defaults for normal operation. Increase `GOOGLE_SHEETS_READ_CACHE_MS` to `30000` if the operator can tolerate up to 30 seconds before manual spreadsheet edits appear in the app and quota pressure remains high.
 
 `BAILEYS_AUTH_DIR` contains WhatsApp linked-device credentials. Keep it inside `.secrets`, never commit or share it, and restrict access to the operator machine. `WHATSAPP_DEFAULT_COUNTRY_CODE` supplies the country code for local ten-digit Supplier Master numbers (`91` for India); numbers already containing a country code are left intact. `OPERATOR_TIME_ZONE` controls the same-calendar-day duplicate follow-up guard. The scheduler checks hourly by default and sends only while WhatsApp is connected.
+
+The WhatsApp adapter is outbound-only: inbound chat payloads are acknowledged but not decrypted or stored. Supplier messages, delivery receipts needed by WhatsApp itself, QR linking, and connection state continue to work without exposing operator conversations to the CRM.
 
 ## 5. Connect and test in the UI
 

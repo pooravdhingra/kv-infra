@@ -6,7 +6,7 @@ The operator dashboard is a clean action layer, Google Sheets are the verificati
 
 ## MVP users
 
-One authenticated operator role. Role management and customer access are not part of the MVP.
+Two authenticated profiles exist: Operator and Owner. Both currently open the same operations workspace; the retained Owner role is reserved for a later, higher-access dashboard. Customer access and general role management are not part of the MVP.
 
 ## MVP capabilities
 
@@ -22,7 +22,7 @@ One authenticated operator role. Role management and customer access are not par
 
 ## Primary screens
 
-- Operator login and action-focused home
+- Operator/Owner login and action-focused home
 - SKU list and create/edit form
 - New order and order detail/stock check
 - Supplier request and pending requests

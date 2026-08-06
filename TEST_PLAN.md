@@ -4,6 +4,8 @@
 
 - Shared environment schema accepts the example local configuration.
 - API health route returns status and version.
+- Unauthenticated users can read only health/auth endpoints; all business routes require a signed session.
+- Operator and Owner credentials create distinct role sessions, modified cookies are rejected, logout clears the cookie, and repeated failed logins are temporarily locked.
 - Web and API TypeScript compile independently.
 - Production builds complete from the repository root.
 - Dashboard recommendations prioritize failed sends, due follow-ups, active packing, and actionable order states from live workflow data.

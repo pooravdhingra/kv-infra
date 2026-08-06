@@ -9,6 +9,7 @@ import { ZodError } from "zod";
 
 import { env } from "./config/env.js";
 import { AppError } from "./lib/app-error.js";
+import { mountProductionWeb } from "./lib/production-web.js";
 import { createGoogleRouter } from "./modules/google/google.routes.js";
 import { GoogleOAuthService } from "./modules/google/google-oauth.service.js";
 import { EncryptedFileTokenStore } from "./modules/google/google-token-store.js";
@@ -43,6 +44,11 @@ import { GoogleSheetsWhatsAppLogRepository } from "./modules/whatsapp/whatsapp.r
 import { WhatsAppService } from "./modules/whatsapp/whatsapp.service.js";
 import { createDashboardRouter } from "./modules/dashboard/dashboard.routes.js";
 import { DashboardService } from "./modules/dashboard/dashboard.service.js";
+import {
+  createAuthRouter,
+  requireAuthentication,
+} from "./modules/auth/auth.routes.js";
+import { AuthService } from "./modules/auth/auth.service.js";
 
 export const createHealthResponse = () => ({
   data: {
@@ -57,12 +63,17 @@ export const createApp = () => {
   const app = express();
 
   app.disable("x-powered-by");
+  if (env.NODE_ENV === "production") app.set("trust proxy", 1);
   app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
   app.use(express.json({ limit: "1mb" }));
 
   app.get(`${API_PREFIX}/health`, (_request, response) => {
     response.json(createHealthResponse());
   });
+
+  const authService = new AuthService();
+  app.use(`${API_PREFIX}/auth`, createAuthRouter(authService));
+  app.use(API_PREFIX, requireAuthentication(authService));
 
   const tokenStore = new EncryptedFileTokenStore();
   const oauth = new GoogleOAuthService(tokenStore);
@@ -157,6 +168,15 @@ export const createApp = () => {
     );
     timer.unref();
   }
+
+  app.use(API_PREFIX, (_request, response) => {
+    const body: ApiError = {
+      error: { code: "NOT_FOUND", message: "Route not found" },
+    };
+    response.status(404).json(body);
+  });
+
+  mountProductionWeb(app);
 
   app.use((_request, response) => {
     const body: ApiError = {

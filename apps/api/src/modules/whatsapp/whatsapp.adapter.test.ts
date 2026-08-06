@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeWhatsAppJid } from "./whatsapp.adapter.js";
+import {
+  ignoreIncomingWhatsAppJid,
+  normalizeWhatsAppJid,
+} from "./whatsapp.adapter.js";
 
 describe("normalizeWhatsAppJid", () => {
   it("adds the configured country code to a local ten-digit number", () => {
@@ -16,5 +19,10 @@ describe("normalizeWhatsAppJid", () => {
     expect(normalizeWhatsAppJid("0091-9810525118", "91")).toBe(
       "919810525118@s.whatsapp.net",
     );
+  });
+
+  it("ignores inbound chats because the integration is outbound-only", () => {
+    expect(ignoreIncomingWhatsAppJid("919810525118@s.whatsapp.net")).toBe(true);
+    expect(ignoreIncomingWhatsAppJid("120363000000000000@g.us")).toBe(true);
   });
 });

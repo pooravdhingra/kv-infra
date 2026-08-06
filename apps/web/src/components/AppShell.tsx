@@ -1,4 +1,5 @@
 import { useEffect, useState, type PropsWithChildren } from "react";
+import type { AuthRole } from "@kv-infra/shared";
 
 import { getGoogleStatus, getWhatsAppStatus } from "../api/client";
 
@@ -13,11 +14,19 @@ const links = [
   ["/settings", "Settings"],
 ] as const;
 
-export const AppShell = ({ children }: PropsWithChildren) => {
+export const AppShell = ({
+  children,
+  role,
+  onLogout,
+}: PropsWithChildren<{
+  role: AuthRole;
+  onLogout: () => Promise<void>;
+}>) => {
   const [connected, setConnected] = useState<boolean | null>(null);
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(
     null,
   );
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     void getGoogleStatus()
@@ -65,6 +74,21 @@ export const AppShell = ({ children }: PropsWithChildren) => {
                 ? "WhatsApp connected"
                 : "WhatsApp offline"}
           </a>
+          <span className="session-role">
+            {role === "OWNER" ? "Owner" : "Operator"}
+          </span>
+          <button
+            type="button"
+            className="text-button logout-button"
+            aria-busy={loggingOut}
+            disabled={loggingOut}
+            onClick={() => {
+              setLoggingOut(true);
+              void onLogout().finally(() => setLoggingOut(false));
+            }}
+          >
+            Log out
+          </button>
         </div>
       </header>
       <nav className="nav" aria-label="Main navigation">

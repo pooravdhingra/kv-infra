@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import type { AuthSession } from "@kv-infra/shared";
+
 import { AppShell } from "./components/AppShell";
 import { DashboardPage } from "./pages/DashboardPage";
 import { CreateOrderPage } from "./pages/CreateOrderPage";
@@ -15,8 +18,16 @@ import { SkuMasterPage } from "./pages/SkuMasterPage";
 import { SupplierRequestsPage } from "./pages/SupplierRequestsPage";
 import { NewSupplierRequestPage } from "./pages/NewSupplierRequestPage";
 import { GroupSupplierRequestsPage } from "./pages/GroupSupplierRequestsPage";
+import { AuthPage } from "./pages/AuthPage";
+import { getAuthSession, logout } from "./api/client";
 
-export const App = () => {
+const Workspace = ({
+  session,
+  onLogout,
+}: {
+  session: AuthSession & { authenticated: true };
+  onLogout: () => Promise<void>;
+}) => {
   const path = window.location.pathname;
   const pages: Record<string, React.ReactNode> = {
     "/": <DashboardPage />,
@@ -48,5 +59,43 @@ export const App = () => {
     <PlaceholderPage />
   );
 
-  return <AppShell>{routedPage}</AppShell>;
+  return (
+    <AppShell role={session.role!} onLogout={onLogout}>
+      {routedPage}
+    </AppShell>
+  );
+};
+
+export const App = () => {
+  const [session, setSession] = useState<AuthSession | null>(null);
+
+  useEffect(() => {
+    const expire = () => setSession({ authenticated: false, role: null });
+    window.addEventListener("kv-auth-expired", expire);
+    void getAuthSession().then(setSession).catch(expire);
+    return () => window.removeEventListener("kv-auth-expired", expire);
+  }, []);
+
+  if (!session) {
+    return (
+      <main
+        className="auth-page auth-loading"
+        aria-label="Loading secure workspace"
+      >
+        <img src="/kv-logo.png" alt="" width="54" height="54" />
+      </main>
+    );
+  }
+  if (!session.authenticated) {
+    return <AuthPage onAuthenticated={setSession} />;
+  }
+  return (
+    <Workspace
+      session={session as AuthSession & { authenticated: true }}
+      onLogout={async () => {
+        await logout();
+        setSession({ authenticated: false, role: null });
+      }}
+    />
+  );
 };
