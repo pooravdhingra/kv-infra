@@ -172,10 +172,6 @@ export const SettingsPage = () => {
         <div className="section-heading">
           <h2>Google Sheets</h2>
         </div>
-        <p className="lead">
-          Authorize the operator account, then verify the configured
-          spreadsheets and exact header contracts.
-        </p>
 
         <div className="status-card">
           <div>
@@ -259,10 +255,6 @@ export const SettingsPage = () => {
         <div className="section-heading">
           <h2>WhatsApp</h2>
         </div>
-        <p className="lead">
-          Link the operator WhatsApp account. Session credentials stay in the
-          configured local secret directory and are never written to Sheets.
-        </p>
         <div className="status-card">
           <div>
             <span
@@ -310,10 +302,6 @@ export const SettingsPage = () => {
         <div className="section-heading">
           <h2>Mobile SKU form</h2>
         </div>
-        <p className="lead">
-          This permanent private link creates SKUs without an application login.
-          Share it only with trusted staff.
-        </p>
         {publicSkuFormUrl ? (
           <div className="public-tool-link">
             <input

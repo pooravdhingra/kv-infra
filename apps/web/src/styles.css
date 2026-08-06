@@ -346,12 +346,14 @@ main {
   outline: 2px solid #526c5a22;
 }
 .data-table,
-.sku-form,
 .status-card,
 .result-list {
   background: #faf9f5;
   border: 1px solid #d9d6cc;
   border-radius: 5px;
+}
+.sku-form {
+  background: #faf9f5;
 }
 .data-table {
   overflow-x: auto;
@@ -568,7 +570,7 @@ main {
   color: #fff;
 }
 .secondary-button {
-  background: #e6e2d8;
+  background: #545454;
   color: #34372f;
 }
 .primary-button:disabled,

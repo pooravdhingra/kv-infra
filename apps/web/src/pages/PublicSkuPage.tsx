@@ -101,7 +101,6 @@ export const PublicSkuPage = ({ token }: { token: string }) => {
   return (
     <PublicPageShell label="SKU form">
       <div className="public-card public-sku-card">
-        <p className="public-kicker">Packing master</p>
         <h1>Add a new SKU</h1>
         <p className="lead">
           OEM and item description are required. Packing values can be added
