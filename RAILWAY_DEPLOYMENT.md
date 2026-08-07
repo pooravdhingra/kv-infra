@@ -148,7 +148,7 @@ Do not upload the local `.baileys-auth` directory to Railway. A fresh hosted pai
 
 ## 8. Enable safe Git deployments
 
-The repository's `.github/workflows/ci.yml` verifies every pull request and every push to `master`.
+The repository's `.github/workflows/ci.yml` verifies every pull request and every push to `staging` and `master`. Configure the persistent test environment first by following [`RAILWAY_STAGING.md`](./RAILWAY_STAGING.md).
 
 In Railway:
 
@@ -160,8 +160,10 @@ In Railway:
 The normal release flow is:
 
 ```text
-feature branch → pull request → GitHub checks pass → merge to master → Railway deploys
+feature branch → PR to staging → test staging → PR staging to master → Railway deploys production
 ```
+
+Do not deploy feature branches directly to production. Production variables, Sheets IDs, volume, Google token, Baileys session, and public-link secrets must never be copied from staging during promotion.
 
 The attached volume means a deployment may have a short interruption while Railway moves the volume from the old container to the new one. This also prevents two deployments from using the same Baileys session concurrently.
 

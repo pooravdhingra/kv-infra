@@ -66,6 +66,7 @@ const envSchema = z.object({
   SESSION_SECRET: z.string().default(""),
   TOKEN_ENCRYPTION_KEY: z.string().default(""),
   PUBLIC_SKU_FORM_TOKEN: z.string().default(""),
+  RAILWAY_ENVIRONMENT_NAME: z.string().trim().optional(),
 });
 
 export const env = envSchema.parse(process.env);

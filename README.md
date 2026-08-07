@@ -47,4 +47,6 @@ For Google Cloud, secrets, spreadsheet preparation, and end-to-end testing, foll
 
 For the single-service production container, Railway volume, GitHub deployment workflow, hosted Google callback, and WhatsApp pairing, follow [`RAILWAY_DEPLOYMENT.md`](./RAILWAY_DEPLOYMENT.md).
 
+For an isolated persistent Railway environment that deploys the `staging` branch against test spreadsheets and separate Google/WhatsApp credentials, follow [`RAILWAY_STAGING.md`](./RAILWAY_STAGING.md).
+
 WhatsApp credentials are stored only in the ignored local directory or mounted production volume configured by `BAILEYS_AUTH_DIR`. Connect the operator account from Settings before sending supplier requests.

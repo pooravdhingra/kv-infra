@@ -10,8 +10,55 @@ import {
   nextSupplierRequestId,
   SupplierRequestService,
 } from "./supplier-request.service.js";
+import type { SupplierRequestRecord } from "./supplier-request.repository.js";
 
 describe("supplier request messages", () => {
+  it("unlinks supplier requests and disables follow-ups without deleting them", async () => {
+    const record: SupplierRequestRecord = {
+      rowNumber: 2,
+      requestId: "REQ-2026-0001",
+      orderId: "ORD-2026-0001",
+      orderLineId: "ORD-2026-0001-L001",
+      sku: "KV-000001",
+      itemDescription: "FLANGE BIG",
+      requiredQuantity: 1000,
+      availableQuantity: 0,
+      shortfallQuantity: 1000,
+      selectedSupplier: "ABC",
+      supplierNumber: "9810525118",
+      supplierPriority: 1,
+      lastMessageAt: "2026-08-04T10:00:00.000Z",
+      nextFollowUpAt: "2026-08-07T10:00:00.000Z",
+      status: "SENT",
+      autoFollowUpEnabled: true,
+      notes: "",
+    };
+    let updated: SupplierRequestRecord | null = null;
+    const service = new SupplierRequestService(
+      {
+        snapshot: async () => ({ records: [record], nextRowNumber: 3 }),
+        append: async () => undefined,
+        appendMany: async () => undefined,
+        update: async (next) => {
+          updated = next;
+        },
+      },
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      service.unlinkForLine(record.orderId, record.orderLineId),
+    ).resolves.toBe(1);
+    expect(updated).toMatchObject({
+      status: "UNLINKED",
+      autoFollowUpEnabled: false,
+      nextFollowUpAt: null,
+    });
+  });
+
   it("uses the approved initial-order wording", () => {
     expect(
       initialOrderMessage([

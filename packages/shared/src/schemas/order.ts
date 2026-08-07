@@ -38,6 +38,18 @@ export const createOrderRequestSchema = z.object({
 });
 
 export const updateOrderRequestSchema = createOrderRequestSchema.extend({
+  actualGrossWeight: z
+    .number()
+    .nonnegative()
+    .max(1_000_000_000)
+    .nullable()
+    .default(null),
+  actualVolume: z
+    .number()
+    .nonnegative()
+    .max(1_000_000_000)
+    .nullable()
+    .default(null),
   items: z
     .array(
       z
@@ -96,6 +108,8 @@ export const orderSchema = z.object({
   totalQuantity: z.number().nonnegative(),
   grossWeight: z.number().nonnegative(),
   volume: z.number().nonnegative(),
+  actualGrossWeight: z.number().nonnegative().nullable(),
+  actualVolume: z.number().nonnegative().nullable(),
   items: z.array(orderLineSchema),
 });
 

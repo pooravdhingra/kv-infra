@@ -7,6 +7,7 @@ export const supplierRequestStatuses = [
   "SEND FAILED",
   "CONFIRMED",
   "RECEIVED",
+  "UNLINKED",
 ] as const;
 
 export const supplierRequestSchema = z.object({

@@ -97,6 +97,32 @@ export class PackingService {
     };
   }
 
+  async unlinkForLine(orderId: string, orderLineId: string) {
+    const events = await this.repository.listEvents();
+    const latest = new Map<string, PackingEvent>();
+    events.forEach((event) => latest.set(event.packingId, event));
+    const linked = [...latest.values()].filter(
+      (event) => event.orderId === orderId && event.orderLineId === orderLineId,
+    );
+    await this.repository.appendEvents(
+      linked.map((event) =>
+        this.eventRow({
+          ...event,
+          assignedToOrder: false,
+          orderId: null,
+          orderLineId: null,
+          notes: [
+            event.notes,
+            `[UNLINKED FROM ${orderId}/${orderLineId}] Order line removed by operator`,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        }),
+      ),
+    );
+    return linked.length;
+  }
+
   async start(input: unknown, idempotencyKey?: string) {
     if (idempotencyKey && this.completed.has(idempotencyKey))
       return this.completed.get(idempotencyKey)!;
@@ -181,7 +207,9 @@ export class PackingService {
     const request = finishPackingRequestSchema.parse(input);
     const events = await this.repository.listEvents();
     const related = events.filter((event) => event.packingId === packingId);
-    const started = related.find((event) => event.status === "IN PACKING");
+    const started = related
+      .filter((event) => event.status === "IN PACKING")
+      .at(-1);
     if (!started)
       throw new AppError(
         404,

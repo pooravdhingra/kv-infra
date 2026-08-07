@@ -19,11 +19,30 @@ import { SupplierRequestsPage } from "./pages/SupplierRequestsPage";
 import { NewSupplierRequestPage } from "./pages/NewSupplierRequestPage";
 import { GroupSupplierRequestsPage } from "./pages/GroupSupplierRequestsPage";
 import { AuthPage } from "./pages/AuthPage";
-import { getAuthSession, logout } from "./api/client";
+import { getAuthSession, getHealth, logout } from "./api/client";
 import { resolveInitialAuthSession } from "./lib/auth-session";
 import { PublicOrderPage } from "./pages/PublicOrderPage";
 import { PublicSkuPage } from "./pages/PublicSkuPage";
 import { ClientOrderLinksPage } from "./pages/ClientOrderLinksPage";
+
+const EnvironmentBanner = () => {
+  const [environment, setEnvironment] = useState<string | null>(null);
+
+  useEffect(() => {
+    void getHealth()
+      .then((response) => setEnvironment(response.data.environment))
+      .catch(() => setEnvironment(null));
+  }, []);
+
+  if (!environment || ["production", "local"].includes(environment))
+    return null;
+
+  return (
+    <div className="environment-banner" role="status">
+      {environment.toUpperCase()} ENVIRONMENT · TEST DATA ONLY
+    </div>
+  );
+};
 
 const Workspace = ({
   session,
@@ -131,10 +150,18 @@ const AuthenticatedApp = () => {
 export const App = () => {
   const path = window.location.pathname;
   const publicOrderMatch = path.match(/^\/order\/([^/]+)$/);
-  if (publicOrderMatch)
-    return <PublicOrderPage token={decodeURIComponent(publicOrderMatch[1]!)} />;
   const publicSkuMatch = path.match(/^\/add-sku\/([^/]+)$/);
-  if (publicSkuMatch)
-    return <PublicSkuPage token={decodeURIComponent(publicSkuMatch[1]!)} />;
-  return <AuthenticatedApp />;
+  const content = publicOrderMatch ? (
+    <PublicOrderPage token={decodeURIComponent(publicOrderMatch[1]!)} />
+  ) : publicSkuMatch ? (
+    <PublicSkuPage token={decodeURIComponent(publicSkuMatch[1]!)} />
+  ) : (
+    <AuthenticatedApp />
+  );
+  return (
+    <>
+      <EnvironmentBanner />
+      {content}
+    </>
+  );
 };

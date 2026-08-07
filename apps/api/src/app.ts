@@ -61,6 +61,9 @@ export const createHealthResponse = () => ({
     status: "ok" as const,
     service: "api" as const,
     version: "0.11.0",
+    environment:
+      env.RAILWAY_ENVIRONMENT_NAME?.toLowerCase() ||
+      (env.NODE_ENV === "production" ? "production" : "local"),
     timestamp: new Date().toISOString(),
   },
 });
@@ -160,6 +163,7 @@ export const createApp = () => {
       await Promise.all([
         skuRepository.listSkus(),
         clientOrderLinkRepository.list(),
+        orderService.list(),
       ]);
     }),
   );
@@ -167,7 +171,12 @@ export const createApp = () => {
   app.use(`${API_PREFIX}/inventory`, createInventoryRouter(inventoryService));
   app.use(
     `${API_PREFIX}/orders`,
-    createOrderRouter(orderService, allocationService),
+    createOrderRouter(
+      orderService,
+      allocationService,
+      supplierRequestService,
+      packingService,
+    ),
   );
   app.use(
     `${API_PREFIX}/allocations`,

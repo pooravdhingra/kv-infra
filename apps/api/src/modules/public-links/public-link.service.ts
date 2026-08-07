@@ -74,6 +74,8 @@ const publicSummary = (order: Order) => ({
   totalQuantity: order.totalQuantity,
   grossWeight: order.grossWeight,
   volume: order.volume,
+  actualGrossWeight: order.actualGrossWeight ?? null,
+  actualVolume: order.actualVolume ?? null,
   items: order.items.map((item) => ({
     sku: item.sku,
     itemDescription: item.itemDescription,

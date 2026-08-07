@@ -60,6 +60,8 @@ export const publicOrderSummarySchema = z.object({
   totalQuantity: z.number().nonnegative(),
   grossWeight: z.number().nonnegative(),
   volume: z.number().nonnegative(),
+  actualGrossWeight: z.number().nonnegative().nullable(),
+  actualVolume: z.number().nonnegative().nullable(),
   items: z.array(publicOrderLineSchema),
 });
 

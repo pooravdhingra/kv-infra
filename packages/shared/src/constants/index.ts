@@ -86,7 +86,11 @@ export const ORDER_HEADERS = [
   "LAST UPDATED",
   "ORDER NOTES",
   "CUSTOMER NAME",
+  "ACTUAL GROSS WT",
+  "ACTUAL VOLUME",
 ] as const;
+
+export const LEGACY_ORDER_HEADERS = ORDER_HEADERS.slice(0, 23);
 
 export const RECEIVING_LOG_HEADERS = [
   "RECEIPT ID",

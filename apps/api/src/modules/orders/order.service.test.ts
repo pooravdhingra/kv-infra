@@ -53,7 +53,7 @@ class FakeOrderRepository implements OrderRepository {
   skuPackingUpdates: OrderSkuPackingUpdate[] = [];
   completionWrites: Array<{
     title: string;
-    lineCount: number;
+    orderLineIds: string[];
     completedAt: string;
   }> = [];
   lineStateWrites: Array<{
@@ -72,10 +72,35 @@ class FakeOrderRepository implements OrderRepository {
     this.written = values;
     return { sheetId: 99, title };
   }
-  async update(title: string, values: unknown[][]) {
-    this.written = [[...ORDER_HEADERS], ...values];
+  async update(
+    title: string,
+    updates: Array<{ orderLineId: string; values: unknown[] }>,
+    actualGrossWeight: number | null,
+    actualVolume: number | null,
+  ) {
+    updates.forEach((update) => {
+      const index = this.written.findIndex(
+        (row, rowIndex) => rowIndex > 0 && row[14] === update.orderLineId,
+      );
+      if (index >= 1) this.written[index] = update.values;
+      else this.written.push(update.values);
+    });
     const sheet = this.sheets.find((candidate) => candidate.title === title);
     if (sheet) sheet.rows = this.written;
+    if (this.written[1]) {
+      this.written[1][23] = actualGrossWeight ?? "";
+      this.written[1][24] = actualVolume ?? "";
+    }
+  }
+  async cancelLine(title: string, rowNumber: number, timestamp: string) {
+    const sheet = this.sheets.find((candidate) => candidate.title === title);
+    const row = sheet?.rows[rowNumber - 1];
+    if (!row) return;
+    row[9] = "CANCELLED";
+    row[17] = 0;
+    row[18] = 0;
+    row[19] = "";
+    row[20] = timestamp;
   }
   async updateStockCheck(_title: string, items: OrderLine[]) {
     this.stockCheckWrites = items;
@@ -98,11 +123,16 @@ class FakeOrderRepository implements OrderRepository {
       row[12] = update.sku.height;
     });
   }
-  async completeOrder(title: string, lineCount: number, completedAt: string) {
-    this.completionWrites.push({ title, lineCount, completedAt });
+  async completeOrder(
+    title: string,
+    orderLineIds: string[],
+    completedAt: string,
+  ) {
+    this.completionWrites.push({ title, orderLineIds, completedAt });
     this.sheets.forEach((sheet) => {
       if (sheet.title !== title) return;
-      sheet.rows.slice(1, lineCount + 1).forEach((row) => {
+      sheet.rows.slice(1).forEach((row) => {
+        if (!orderLineIds.includes(String(row[14]))) return;
         row[9] = "SHIPPED";
         row[20] = completedAt;
       });
@@ -294,6 +324,8 @@ describe("OrderService", () => {
       customerName: "Updated Traders",
       dateReceived: "2026-08-05",
       orderNotes: "Revised",
+      actualGrossWeight: 82.5,
+      actualVolume: 1.25,
       items: [
         {
           orderLineId: created.items[0]!.orderLineId,
@@ -309,6 +341,8 @@ describe("OrderService", () => {
       dateReceived: "2026-08-05",
       orderNotes: "Revised",
       totalQuantity: 700,
+      actualGrossWeight: 82.5,
+      actualVolume: 1.25,
     });
     expect(updated.items.map((item) => item.orderLineId)).toEqual([
       created.items[0]!.orderLineId,
@@ -316,6 +350,77 @@ describe("OrderService", () => {
     ]);
     expect(repository.written[1]?.[22]).toBe("UPDATED TRADERS");
     expect(repository.written[2]?.[14]).toBe(`${created.orderId}-L002`);
+  });
+
+  it("cancels an order row without deleting it from the sheet", async () => {
+    const repository = new FakeOrderRepository();
+    const service = new OrderService(
+      repository,
+      skuRepository,
+      inventoryService,
+    );
+    const created = await service.create({
+      customerName: "ABC Traders",
+      dateReceived: "2026-08-04",
+      items: [
+        { sku: "KV-000001", cartons: 3 },
+        { sku: "KV-000001", cartons: 2 },
+      ],
+    });
+    repository.sheets = [
+      { sheetId: 99, title: created.sheetTitle, rows: repository.written },
+    ];
+
+    const updated = await service.cancelLine(
+      created.orderId,
+      created.items[0]!.orderLineId,
+    );
+
+    expect(repository.written).toHaveLength(3);
+    expect(repository.written[1]?.[9]).toBe("CANCELLED");
+    expect(updated.items).toHaveLength(1);
+    expect(updated.items[0]?.orderLineId).toBe(created.items[1]!.orderLineId);
+    await expect(
+      service.cancelLine(created.orderId, created.items[1]!.orderLineId),
+    ).rejects.toMatchObject({ code: "ORDER_REQUIRES_ITEM" });
+  });
+
+  it("never reuses a cancelled order-line identity", async () => {
+    const repository = new FakeOrderRepository();
+    const service = new OrderService(
+      repository,
+      skuRepository,
+      inventoryService,
+    );
+    const created = await service.create({
+      customerName: "ABC Traders",
+      dateReceived: "2026-08-04",
+      items: [
+        { sku: "KV-000001", cartons: 3 },
+        { sku: "KV-000001", cartons: 2 },
+      ],
+    });
+    repository.sheets = [
+      { sheetId: 99, title: created.sheetTitle, rows: repository.written },
+    ];
+    await service.cancelLine(created.orderId, created.items[1]!.orderLineId);
+
+    const updated = await service.update(created.orderId, {
+      customerName: created.customerName,
+      dateReceived: created.dateReceived,
+      items: [
+        {
+          orderLineId: created.items[0]!.orderLineId,
+          sku: "KV-000001",
+          cartons: 3,
+        },
+        { sku: "KV-000001", cartons: 1 },
+      ],
+    });
+
+    expect(updated.items[1]?.orderLineId).toBe(`${created.orderId}-L003`);
+    expect(repository.written[2]?.[9]).toBe("CANCELLED");
+    expect(repository.written[3]?.[14]).toBe(`${created.orderId}-L003`);
   });
 
   it("does not remove existing lines or reduce them below reserved quantity", async () => {
@@ -443,7 +548,7 @@ describe("OrderService", () => {
     });
     expect(repository.completionWrites[0]).toMatchObject({
       title: created.sheetTitle,
-      lineCount: 1,
+      orderLineIds: [created.items[0]!.orderLineId],
     });
     expect(shipmentInventory[0]).toMatchObject({
       packedCartons: 0,

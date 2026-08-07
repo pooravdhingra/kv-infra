@@ -48,7 +48,9 @@
 - Ten-digit supplier numbers receive the configured default country code, and nonexistent WhatsApp recipients fail before the attempt is recorded as sent.
 - WhatsApp disconnect clears the saved linked-device credentials, suppresses reconnect, and permits a different account to be paired.
 - Client order links are signed, customer-specific, single-submit, expose only a restricted order summary after submission, and return unavailable after shipment or explicit disablement.
-- Operator edits preserve existing order-line IDs, reject line removal or quantities below active reservations, append new lines, and remain read-only through the client link.
+- Operator edits preserve existing order-line IDs, reject quantities below active reservations, append new lines, and remain read-only through the client link.
+- Removing an operator order line marks its sheet row cancelled, releases active allocations with compensating events, disables and unlinks supplier requests, and appends unlinked packing snapshots without deleting business history.
+- Estimated gross weight and volume total only measurable order lines and show numeric zero contributions for incomplete SKUs; operator-entered actual totals remain blank until entered and then appear in the public read-only summary.
 - The permanent public SKU form rejects an incorrect token and creates through the same validated SKU service when its configured token matches.
 - The Packing Master migration adds OEM as column I and infers existing encoded identifiers without rewriting business identities.
 - Optional delivery confirmation is allowed only for an explicitly received linked request and cannot block the receipt.

@@ -108,9 +108,34 @@ export class SupplierRequestService {
 
   async list() {
     const snapshot = await this.repository.snapshot();
-    return (await this.hydrate(snapshot.records)).sort((left, right) =>
-      right.requestId.localeCompare(left.requestId),
+    return (
+      await this.hydrate(
+        snapshot.records.filter((record) => record.status !== "UNLINKED"),
+      )
+    ).sort((left, right) => right.requestId.localeCompare(left.requestId));
+  }
+
+  async unlinkForLine(orderId: string, orderLineId: string) {
+    const records = (await this.repository.snapshot()).records.filter(
+      (record) =>
+        record.orderId === orderId &&
+        record.orderLineId === orderLineId &&
+        record.status !== "UNLINKED",
     );
+    for (const record of records)
+      await this.repository.update({
+        ...record,
+        status: "UNLINKED",
+        autoFollowUpEnabled: false,
+        nextFollowUpAt: null,
+        notes: [
+          record.notes,
+          `[UNLINKED FROM ${orderId}/${orderLineId}] Order line removed by operator`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      });
+    return records.length;
   }
 
   async pending() {
@@ -425,7 +450,7 @@ export class SupplierRequestService {
   async markConfirmed(requestId: string, input: unknown) {
     const { notes } = updateSupplierRequestNotesSchema.parse(input);
     const record = await this.findRecord(requestId);
-    if (record.status === "RECEIVED")
+    if (record.status === "RECEIVED" || record.status === "UNLINKED")
       throw new AppError(409, "REQUEST_RECEIVED", `${requestId} is received`);
     const updated = {
       ...record,
@@ -510,7 +535,11 @@ export class SupplierRequestService {
 
   async sendFollowUp(requestId: string, requireDue = false) {
     const record = await this.findRecord(requestId);
-    if (record.status === "RECEIVED" || !record.autoFollowUpEnabled)
+    if (
+      record.status === "RECEIVED" ||
+      record.status === "UNLINKED" ||
+      !record.autoFollowUpEnabled
+    )
       throw new AppError(
         409,
         "FOLLOW_UP_DISABLED",

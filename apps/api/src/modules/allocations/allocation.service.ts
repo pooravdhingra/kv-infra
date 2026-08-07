@@ -181,6 +181,20 @@ export class AllocationService {
     return allocation;
   }
 
+  async cancelForLine(orderId: string, orderLineId: string) {
+    const active = (await this.list(orderId)).filter(
+      (allocation) =>
+        allocation.orderLineId === orderLineId && !allocation.cancelled,
+    );
+    for (const allocation of active)
+      await this.cancel(
+        allocation.allocationId,
+        { notes: `Order line ${orderLineId} removed by operator` },
+        `remove-order-line:${allocation.allocationId}`,
+      );
+    return active.length;
+  }
+
   async cancel(allocationId: string, input: unknown, idempotencyKey?: string) {
     if (idempotencyKey && this.completed.has(idempotencyKey))
       return this.completed.get(idempotencyKey)!;

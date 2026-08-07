@@ -72,12 +72,28 @@ const OrderSummary = ({ state }: { state: PublicOrderState }) => {
           <strong>{summary.totalQuantity}</strong>
         </div>
         <div>
-          <span>Gross weight</span>
-          <strong>{summary.grossWeight || "—"} kg</strong>
+          <span>Estimated gross weight</span>
+          <strong>{summary.grossWeight} kg</strong>
         </div>
         <div>
-          <span>Volume</span>
+          <span>Estimated volume</span>
           <strong>{formatDecimal(summary.volume)} CBM</strong>
+        </div>
+        <div>
+          <span>Actual gross weight</span>
+          <strong>
+            {summary.actualGrossWeight === null
+              ? ""
+              : `${summary.actualGrossWeight} kg`}
+          </strong>
+        </div>
+        <div>
+          <span>Actual volume</span>
+          <strong>
+            {summary.actualVolume === null
+              ? ""
+              : `${formatDecimal(summary.actualVolume)} CBM`}
+          </strong>
         </div>
       </div>
     </div>
@@ -132,21 +148,6 @@ export const PublicOrderPage = ({ token }: { token: string }) => {
     }),
     { cartons: 0, quantity: 0, weight: 0, volume: 0 },
   );
-  const hasMissingWeight = preview.some(
-    (line) =>
-      line &&
-      (line.skuDetails.quantityPerCarton <= 0 ||
-        line.skuDetails.weightPerCarton <= 0),
-  );
-  const hasMissingVolume = preview.some(
-    (line) =>
-      line &&
-      (line.skuDetails.quantityPerCarton <= 0 ||
-        line.skuDetails.length <= 0 ||
-        line.skuDetails.breadth <= 0 ||
-        line.skuDetails.height <= 0),
-  );
-
   const updateLine = (index: number, updates: Partial<DraftLine>) =>
     setLines((current) =>
       current.map((line, lineIndex) =>
@@ -405,18 +406,12 @@ export const PublicOrderPage = ({ token }: { token: string }) => {
               <strong>{totals.quantity}</strong>
             </div>
             <div>
-              <span>Gross weight</span>
-              <strong>
-                {hasMissingWeight ? "Missing" : `${totals.weight} kg`}
-              </strong>
+              <span>Estimated gross weight</span>
+              <strong>{totals.weight} kg</strong>
             </div>
             <div>
-              <span>Volume</span>
-              <strong>
-                {hasMissingVolume
-                  ? "Missing"
-                  : `${formatDecimal(totals.volume)} CBM`}
-              </strong>
+              <span>Estimated volume</span>
+              <strong>{formatDecimal(totals.volume)} CBM</strong>
             </div>
           </div>
           {message && <div className="notice error-notice">{message}</div>}

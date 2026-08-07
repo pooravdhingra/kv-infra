@@ -15,6 +15,7 @@ import {
   createSku,
   getOrder,
   listSkus,
+  removeOrderLine,
   updateOrder,
 } from "../api/client";
 import { formatDecimal } from "../lib/format-number";
@@ -91,7 +92,10 @@ export const CreateOrderPage = ({ orderId }: { orderId?: string }) => {
   const [customerName, setCustomerName] = useState("");
   const [dateReceived, setDateReceived] = useState(localDate);
   const [orderNotes, setOrderNotes] = useState("");
+  const [actualGrossWeight, setActualGrossWeight] = useState<DraftQuantity>("");
+  const [actualVolume, setActualVolume] = useState<DraftQuantity>("");
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
+  const [removedLines, setRemovedLines] = useState<DraftLine[]>([]);
   const [activeSkuLine, setActiveSkuLine] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -114,6 +118,8 @@ export const CreateOrderPage = ({ orderId }: { orderId?: string }) => {
         setCustomerName(existingOrder.customerName);
         setDateReceived(existingOrder.dateReceived);
         setOrderNotes(existingOrder.orderNotes);
+        setActualGrossWeight(existingOrder.actualGrossWeight ?? "");
+        setActualVolume(existingOrder.actualVolume ?? "");
         setLines(
           existingOrder.items.map((item) => ({
             orderLineId: item.orderLineId,
@@ -164,21 +170,6 @@ export const CreateOrderPage = ({ orderId }: { orderId?: string }) => {
     }),
     { cartons: 0, quantity: 0, weight: 0, volume: 0 },
   );
-  const hasMissingWeight = preview.some(
-    (line) =>
-      line &&
-      (line.skuDetails.quantityPerCarton <= 0 ||
-        line.skuDetails.weightPerCarton <= 0),
-  );
-  const hasMissingVolume = preview.some(
-    (line) =>
-      line &&
-      (line.skuDetails.length <= 0 ||
-        line.skuDetails.quantityPerCarton <= 0 ||
-        line.skuDetails.breadth <= 0 ||
-        line.skuDetails.height <= 0),
-  );
-
   const updateLine = (index: number, updates: Partial<DraftLine>) =>
     setLines((current) =>
       current.map((line, lineIndex) =>
@@ -287,7 +278,8 @@ export const CreateOrderPage = ({ orderId }: { orderId?: string }) => {
     setSaving(true);
     setMessage("");
     try {
-      const orderItems = lines.map((line) => {
+      const submittedLines = orderId ? [...lines, ...removedLines] : lines;
+      const orderItems = submittedLines.map((line) => {
         const sku = skus.find((item) => item.sku === line.sku)!;
         const quantity =
           sku.quantityPerCarton > 0
@@ -304,10 +296,28 @@ export const CreateOrderPage = ({ orderId }: { orderId?: string }) => {
         dateReceived,
         orderNotes,
         items: orderItems,
+        ...(orderId
+          ? {
+              actualGrossWeight:
+                typeof actualGrossWeight === "number" &&
+                Number.isFinite(actualGrossWeight)
+                  ? actualGrossWeight
+                  : null,
+              actualVolume:
+                typeof actualVolume === "number" &&
+                Number.isFinite(actualVolume)
+                  ? actualVolume
+                  : null,
+            }
+          : {}),
       };
       const order = orderId
         ? await updateOrder(orderId, input as UpdateOrderRequest)
         : await createOrder(input as CreateOrderRequest);
+      if (orderId)
+        for (const line of removedLines)
+          if (line.orderLineId)
+            await removeOrderLine(orderId, line.orderLineId);
       window.location.assign(`/orders/${encodeURIComponent(order.orderId)}`);
     } catch (error) {
       setMessage(apiErrorMessage(error));
@@ -372,6 +382,40 @@ export const CreateOrderPage = ({ orderId }: { orderId?: string }) => {
             onChange={(event) => setOrderNotes(event.target.value)}
           />
         </label>
+        {orderId && (
+          <div className="order-meta form-grid actual-totals-fields">
+            <label>
+              Actual gross weight (kg)
+              <input
+                type="number"
+                min="0"
+                step="any"
+                placeholder="Enter after weighing"
+                value={actualGrossWeight}
+                onChange={(event) =>
+                  setActualGrossWeight(
+                    event.target.value === "" ? "" : event.target.valueAsNumber,
+                  )
+                }
+              />
+            </label>
+            <label>
+              Actual volume (CBM)
+              <input
+                type="number"
+                min="0"
+                step="any"
+                placeholder="Enter after packing"
+                value={actualVolume}
+                onChange={(event) =>
+                  setActualVolume(
+                    event.target.value === "" ? "" : event.target.valueAsNumber,
+                  )
+                }
+              />
+            </label>
+          </div>
+        )}
 
         <div className="section-heading order-lines-heading">
           <h2>Order items</h2>
@@ -463,8 +507,8 @@ export const CreateOrderPage = ({ orderId }: { orderId?: string }) => {
             <span>Cartons</span>
             <span>Qty / CTN</span>
             <span>T-QTY</span>
-            <span>Gross kg</span>
-            <span>Volume CBM</span>
+            <span>Est. gross kg</span>
+            <span>Est. volume CBM</span>
             <span />
           </div>
           {lines.map((line, index) => {
@@ -608,7 +652,7 @@ export const CreateOrderPage = ({ orderId }: { orderId?: string }) => {
                     ? calculated.skuDetails.quantityPerCarton > 0 &&
                       calculated.skuDetails.weightPerCarton > 0
                       ? calculated.grossWeight
-                      : "Missing"
+                      : 0
                     : "—"}
                 </span>
                 <span>
@@ -618,25 +662,23 @@ export const CreateOrderPage = ({ orderId }: { orderId?: string }) => {
                       calculated.skuDetails.breadth > 0 &&
                       calculated.skuDetails.height > 0
                       ? formatDecimal(calculated.volume)
-                      : "Missing"
+                      : 0
                     : "—"}
                 </span>
-                {line.orderLineId ? (
-                  <span className="locked-line-label">Existing</span>
-                ) : (
-                  <button
-                    type="button"
-                    className="text-button danger-text"
-                    disabled={lines.length === 1}
-                    onClick={() =>
-                      setLines(
-                        lines.filter((_, lineIndex) => lineIndex !== index),
-                      )
-                    }
-                  >
-                    Remove
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="text-button danger-text"
+                  disabled={lines.length === 1}
+                  onClick={() => {
+                    if (line.orderLineId)
+                      setRemovedLines((current) => [...current, line]);
+                    setLines(
+                      lines.filter((_, lineIndex) => lineIndex !== index),
+                    );
+                  }}
+                >
+                  Remove
+                </button>
               </div>
             );
           })}
@@ -652,18 +694,12 @@ export const CreateOrderPage = ({ orderId }: { orderId?: string }) => {
             <strong>{totals.quantity}</strong>
           </div>
           <div>
-            <span>Gross weight</span>
-            <strong>
-              {hasMissingWeight ? "Missing" : `${totals.weight} kg`}
-            </strong>
+            <span>Estimated gross weight</span>
+            <strong>{totals.weight} kg</strong>
           </div>
           <div>
-            <span>Volume</span>
-            <strong>
-              {hasMissingVolume
-                ? "Missing"
-                : `${formatDecimal(totals.volume)} CBM`}
-            </strong>
+            <span>Estimated volume</span>
+            <strong>{formatDecimal(totals.volume)} CBM</strong>
           </div>
         </div>
         {message && <div className="notice error-notice">{message}</div>}

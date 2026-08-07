@@ -1,5 +1,6 @@
 import {
   CUBIC_INCH_TO_CUBIC_METRE,
+  LEGACY_ORDER_HEADERS,
   ORDER_HEADERS,
   calculateCartonsFromTotalQuantity,
   type OrderLine,
@@ -29,12 +30,22 @@ export interface OrderRepository {
     title: string,
     values: unknown[][],
   ): Promise<{ sheetId: number; title: string }>;
-  update(title: string, values: unknown[][]): Promise<void>;
+  update(
+    title: string,
+    rows: Array<{ orderLineId: string; values: unknown[] }>,
+    actualGrossWeight: number | null,
+    actualVolume: number | null,
+  ): Promise<void>;
+  cancelLine(
+    title: string,
+    rowNumber: number,
+    timestamp: string,
+  ): Promise<void>;
   updateStockCheck(title: string, items: OrderLine[]): Promise<void>;
   updateSkuPackingDetails(updates: OrderSkuPackingUpdate[]): Promise<void>;
   completeOrder(
     title: string,
-    lineCount: number,
+    orderLineIds: string[],
     completedAt: string,
   ): Promise<void>;
   updateLineState(
@@ -63,6 +74,10 @@ export const isOrderHeader = (row: unknown[]) =>
   row.length === ORDER_HEADERS.length &&
   row.every((value, index) => String(value) === ORDER_HEADERS[index]);
 
+const isLegacyOrderHeader = (row: unknown[]) =>
+  row.length === LEGACY_ORDER_HEADERS.length &&
+  row.every((value, index) => String(value) === LEGACY_ORDER_HEADERS[index]);
+
 export const orderVolumeFormula = (row: number) =>
   `=K${row}*L${row}*M${row}*E${row}*${CUBIC_INCH_TO_CUBIC_METRE}`;
 
@@ -76,10 +91,34 @@ export class GoogleSheetsOrderRepository implements OrderRepository {
       id,
       sheets.map((sheet) => sheet.title),
     );
-    return sheets.map((sheet, index) => ({
+    const snapshots = sheets.map((sheet, index) => ({
       ...sheet,
       rows: rows[index] ?? [],
     }));
+    const legacy = snapshots.filter((sheet) =>
+      isLegacyOrderHeader(sheet.rows[0] ?? []),
+    );
+    if (legacy.length > 0) {
+      await this.sheets.batchUpdateRanges(
+        id,
+        legacy.map((sheet) => ({
+          range: `'${sheet.title.replaceAll("'", "''")}'!X1:Y1`,
+          values: [["ACTUAL GROSS WT", "ACTUAL VOLUME"]],
+        })),
+      );
+      legacy.forEach((sheet) => {
+        sheet.rows[0] = [...ORDER_HEADERS];
+      });
+      await this.sheets.formatOrderTabs(
+        id,
+        legacy.map((sheet) => ({
+          sheetId: sheet.sheetId,
+          hiddenColumnStart: 13,
+          hiddenColumnEnd: ORDER_HEADERS.length,
+        })),
+      );
+    }
+    return snapshots;
   }
 
   async create(title: string, values: unknown[][]) {
@@ -96,22 +135,73 @@ export class GoogleSheetsOrderRepository implements OrderRepository {
     return created;
   }
 
-  async update(title: string, values: unknown[][]) {
+  async update(
+    title: string,
+    updates: Array<{ orderLineId: string; values: unknown[] }>,
+    actualGrossWeight: number | null,
+    actualVolume: number | null,
+  ) {
     const escaped = title.replaceAll("'", "''");
-    await this.sheets.updateRange(
-      spreadsheetId(),
-      `'${escaped}'!A2:W${values.length + 1}`,
-      values,
+    const rows = await this.sheets.readRows(spreadsheetId(), title);
+    const rowByLineId = new Map(
+      rows.flatMap((row, index) =>
+        index > 0 && row[14]
+          ? [[String(row[14]).trim(), index + 1] as const]
+          : [],
+      ),
     );
+    let nextRowNumber = rows.length + 1;
+    await this.sheets.batchUpdateRanges(spreadsheetId(), [
+      ...updates.map((update) => {
+        const rowNumber =
+          rowByLineId.get(update.orderLineId) ?? nextRowNumber++;
+        const values = [...update.values];
+        if (Number(values[2]) > 0) {
+          values[5] = `=E${rowNumber}*C${rowNumber}`;
+          values[7] = `=E${rowNumber}*G${rowNumber}`;
+          values[8] = orderVolumeFormula(rowNumber);
+        }
+        values[16] = `=F${rowNumber}`;
+        return {
+          range: `'${escaped}'!A${rowNumber}:W${rowNumber}`,
+          values: [values.slice(0, 23)],
+        };
+      }),
+      {
+        range: `'${escaped}'!X2:Y2`,
+        values: [[actualGrossWeight ?? "", actualVolume ?? ""]],
+      },
+    ]);
+  }
+
+  async cancelLine(title: string, rowNumber: number, timestamp: string) {
+    const escaped = title.replaceAll("'", "''");
+    await this.sheets.batchUpdateRanges(spreadsheetId(), [
+      { range: `'${escaped}'!J${rowNumber}`, values: [["CANCELLED"]] },
+      {
+        range: `'${escaped}'!R${rowNumber}:T${rowNumber}`,
+        values: [[0, 0, ""]],
+      },
+      { range: `'${escaped}'!U${rowNumber}`, values: [[timestamp]] },
+    ]);
   }
 
   async updateStockCheck(title: string, items: OrderLine[]) {
     const escaped = title.replaceAll("'", "''");
     const timestamp = new Date().toISOString();
+    const rows = await this.sheets.readRows(spreadsheetId(), title);
+    const rowByLineId = new Map(
+      rows.flatMap((row, index) =>
+        index > 0 && row[14]
+          ? [[String(row[14]).trim(), index + 1] as const]
+          : [],
+      ),
+    );
     await this.sheets.batchUpdateRanges(
       spreadsheetId(),
-      items.flatMap((item, index) => {
-        const row = index + 2;
+      items.flatMap((item) => {
+        const row = rowByLineId.get(item.orderLineId);
+        if (!row) return [];
         const status =
           item.remainingQuantity === 0
             ? "FULLY RESERVED"
@@ -179,18 +269,25 @@ export class GoogleSheetsOrderRepository implements OrderRepository {
     );
   }
 
-  async completeOrder(title: string, lineCount: number, completedAt: string) {
+  async completeOrder(
+    title: string,
+    orderLineIds: string[],
+    completedAt: string,
+  ) {
     const escaped = title.replaceAll("'", "''");
-    await this.sheets.batchUpdateRanges(spreadsheetId(), [
-      {
-        range: `'${escaped}'!J2:J${lineCount + 1}`,
-        values: Array.from({ length: lineCount }, () => ["SHIPPED"]),
-      },
-      {
-        range: `'${escaped}'!U2:U${lineCount + 1}`,
-        values: Array.from({ length: lineCount }, () => [completedAt]),
-      },
-    ]);
+    const rows = await this.sheets.readRows(spreadsheetId(), title);
+    const targets = rows.flatMap((row, index) =>
+      index > 0 && orderLineIds.includes(String(row[14] ?? "").trim())
+        ? [index + 1]
+        : [],
+    );
+    await this.sheets.batchUpdateRanges(
+      spreadsheetId(),
+      targets.flatMap((row) => [
+        { range: `'${escaped}'!J${row}`, values: [["SHIPPED"]] },
+        { range: `'${escaped}'!U${row}`, values: [[completedAt]] },
+      ]),
+    );
   }
 
   async updateLineState(

@@ -5,6 +5,7 @@ export const healthResponseSchema = z.object({
     status: z.literal("ok"),
     service: z.literal("api"),
     version: z.string(),
+    environment: z.string().min(1),
     timestamp: z.string().datetime(),
   }),
 });

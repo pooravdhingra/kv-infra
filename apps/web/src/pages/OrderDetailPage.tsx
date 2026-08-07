@@ -228,28 +228,27 @@ export const OrderDetailPage = ({ orderId }: { orderId: string }) => {
           <strong>{order.totalQuantity}</strong>
         </div>
         <div>
-          <span>Gross weight</span>
+          <span>Estimated gross weight</span>
+          <strong>{order.grossWeight} kg</strong>
+        </div>
+        <div>
+          <span>Estimated volume</span>
+          <strong>{formatDecimal(order.volume)} CBM</strong>
+        </div>
+        <div>
+          <span>Actual gross weight</span>
           <strong>
-            {order.items.some(
-              (item) =>
-                item.quantityPerCarton <= 0 || item.weightPerCarton <= 0,
-            )
-              ? "Missing"
-              : `${order.grossWeight} kg`}
+            {order.actualGrossWeight === null
+              ? "—"
+              : `${order.actualGrossWeight} kg`}
           </strong>
         </div>
         <div>
-          <span>Volume</span>
+          <span>Actual volume</span>
           <strong>
-            {order.items.some(
-              (item) =>
-                item.quantityPerCarton <= 0 ||
-                item.length <= 0 ||
-                item.breadth <= 0 ||
-                item.height <= 0,
-            )
-              ? "Missing"
-              : `${formatDecimal(order.volume)} CBM`}
+            {order.actualVolume === null
+              ? "—"
+              : `${formatDecimal(order.actualVolume)} CBM`}
           </strong>
         </div>
       </div>

@@ -44,7 +44,7 @@ export type SupplierRequestRecord = {
   supplierPriority: number;
   lastMessageAt: string | null;
   nextFollowUpAt: string | null;
-  status: "SENT" | "SEND FAILED" | "CONFIRMED" | "RECEIVED";
+  status: "SENT" | "SEND FAILED" | "CONFIRMED" | "RECEIVED" | "UNLINKED";
   autoFollowUpEnabled: boolean;
   notes: string;
 };
@@ -91,7 +91,13 @@ export class GoogleSheetsSupplierRequestRepository implements SupplierRequestRep
       SUPPLIER_REQUEST_HEADERS,
       env.SUPPLIER_REQUESTS_SHEET_NAME,
     );
-    const statuses = ["SENT", "SEND FAILED", "CONFIRMED", "RECEIVED"];
+    const statuses = [
+      "SENT",
+      "SEND FAILED",
+      "CONFIRMED",
+      "RECEIVED",
+      "UNLINKED",
+    ];
     return {
       records: rows.slice(1).flatMap((row, index) => {
         if (!row[0]) return [];

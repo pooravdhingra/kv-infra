@@ -96,10 +96,10 @@ describe("AllocationService", () => {
     });
     expect(repository.committedInventory?.totalAssigned).toBe(200);
 
-    const cancelled = await service.cancel(created.allocationId, {
-      notes: "Customer reduced order",
-    });
-    expect(cancelled.cancelled).toBe(true);
+    await expect(
+      service.cancelForLine(order.orderId, order.items[0]!.orderLineId),
+    ).resolves.toBe(1);
+    expect((await service.list(order.orderId))[0]?.cancelled).toBe(true);
     expect(repository.events[1]?.quantity).toBe(-200);
     expect(repository.events[1]?.notes).toContain(
       `[CANCELS: ${created.allocationId}]`,

@@ -59,6 +59,7 @@ export interface PackingRepository {
     inventory: InventorySourceRecord,
     allocationRow?: unknown[],
   ): Promise<void>;
+  appendEvents(eventRows: unknown[][]): Promise<void>;
 }
 
 export class GoogleSheetsPackingRepository implements PackingRepository {
@@ -167,5 +168,17 @@ export class GoogleSheetsPackingRepository implements PackingRepository {
           ]
         : []),
     ]);
+  }
+
+  async appendEvents(eventRows: unknown[][]) {
+    if (eventRows.length === 0) return;
+    const qa = await this.qaRows();
+    await this.sheets.batchUpdateRanges(
+      spreadsheetId(),
+      eventRows.map((row, index) => ({
+        range: `${quote(env.QA_LOG_SHEET_NAME)}!A${qa.length + index + 1}`,
+        values: [row],
+      })),
+    );
   }
 }

@@ -52,6 +52,8 @@ const numeric = (value: unknown, label: string) => {
 };
 
 const text = (value: unknown) => String(value ?? "").trim();
+const optionalNumeric = (value: unknown, label: string) =>
+  text(value) === "" ? null : numeric(value, label);
 
 const allocationKey = (orderId: string, orderLineId: string) =>
   `${orderId}\u0000${orderLineId}`;
@@ -171,7 +173,9 @@ export class OrderService {
     const updates = snapshot.flatMap((sheet) => {
       if (!isOrderHeader(sheet.rows[0] ?? [])) return [];
       const dataRows = sheet.rows.flatMap((row, index) =>
-        index > 0 && row[13] ? [{ row, rowNumber: index + 1 }] : [],
+        index > 0 && row[13] && text(row[9]).toUpperCase() !== "CANCELLED"
+          ? [{ row, rowNumber: index + 1 }]
+          : [],
       );
       if (
         dataRows.length === 0 ||
@@ -312,6 +316,8 @@ export class OrderService {
           timestamp,
           request.orderNotes,
           request.customerName,
+          "",
+          "",
         ];
       }),
     ];
@@ -323,6 +329,8 @@ export class OrderService {
       customerName: request.customerName,
       dateReceived: request.dateReceived,
       orderNotes: request.orderNotes,
+      actualGrossWeight: null,
+      actualVolume: null,
       sheetTitle: created.title,
       sheetUrl: sheetUrl(created.sheetId),
       ...this.totals(items),
@@ -364,9 +372,10 @@ export class OrderService {
         `Existing order line ${omittedLine.orderLineId} cannot be removed`,
       );
 
-    const [skuRecords, inventory] = await Promise.all([
+    const [skuRecords, inventory, orderSnapshot] = await Promise.all([
       this.skuRepository.listSkus(),
       this.inventoryService.list(),
+      this.repository.snapshot(),
     ]);
     const skuMap = new Map(
       skuRecords
@@ -374,9 +383,17 @@ export class OrderService {
         .map((sku) => [sku.sku, sku]),
     );
     const inventoryMap = new Map(inventory.map((item) => [item.sku, item]));
-    const usedLineIds = new Set(current.items.map((item) => item.orderLineId));
-    let nextLineNumber = current.items.reduce((highest, item) => {
-      const match = /-L(\d+)$/.exec(item.orderLineId);
+    const historicalLineIds =
+      orderSnapshot
+        .find((sheet) => sheet.title === current.sheetTitle)
+        ?.rows.flatMap((row, index) =>
+          index > 0 && text(row[13]) === orderId && text(row[14])
+            ? [text(row[14])]
+            : [],
+        ) ?? [];
+    const usedLineIds = new Set(historicalLineIds);
+    let nextLineNumber = historicalLineIds.reduce((highest, lineId) => {
+      const match = /-L(\d+)$/.exec(lineId);
       return match ? Math.max(highest, Number(match[1])) : highest;
     }, 0);
     const nextLineId = () => {
@@ -469,13 +486,20 @@ export class OrderService {
         request.orderNotes,
         items,
         timestamp,
-      ),
+      ).map((values, index) => ({
+        orderLineId: items[index]!.orderLineId,
+        values,
+      })),
+      request.actualGrossWeight,
+      request.actualVolume,
     );
     return orderSchema.parse({
       ...current,
       customerName: request.customerName,
       dateReceived: request.dateReceived,
       orderNotes: request.orderNotes,
+      actualGrossWeight: request.actualGrossWeight,
+      actualVolume: request.actualVolume,
       ...this.totals(items),
       items,
     });
@@ -603,7 +627,7 @@ export class OrderService {
     try {
       await this.repository.completeOrder(
         order.sheetTitle,
-        order.items.length,
+        order.items.map((item) => item.orderLineId),
         completedAt,
       );
     } catch (error) {
@@ -709,11 +733,57 @@ export class OrderService {
         (row, index) =>
           index > 0 &&
           text(row[13]) === orderId &&
-          text(row[14]) === orderLineId,
+          text(row[14]) === orderLineId &&
+          text(row[9]).toUpperCase() !== "CANCELLED",
       );
       if (rowIndex >= 1) {
         return { sheet, row: sheet.rows[rowIndex]!, rowNumber: rowIndex + 1 };
       }
+    }
+    throw new AppError(
+      404,
+      "ORDER_LINE_NOT_FOUND",
+      `Order line ${orderLineId} was not found in ${orderId}`,
+    );
+  }
+
+  async cancelLine(orderId: string, orderLineId: string) {
+    const snapshot = await this.repository.snapshot();
+    for (const sheet of snapshot) {
+      if (!isOrderHeader(sheet.rows[0] ?? [])) continue;
+      const rowIndex = sheet.rows.findIndex(
+        (row, index) =>
+          index > 0 &&
+          text(row[13]) === orderId &&
+          text(row[14]) === orderLineId,
+      );
+      if (rowIndex < 1) continue;
+      const row = sheet.rows[rowIndex]!;
+      if (text(row[9]).toUpperCase() === "CANCELLED") return this.get(orderId);
+      if (text(row[9]).toUpperCase() === "SHIPPED")
+        throw new AppError(
+          409,
+          "ORDER_COMPLETED",
+          `${orderId} has already been shipped`,
+        );
+      const activeCount = sheet.rows.filter(
+        (candidate, index) =>
+          index > 0 &&
+          text(candidate[13]) === orderId &&
+          text(candidate[9]).toUpperCase() !== "CANCELLED",
+      ).length;
+      if (activeCount <= 1)
+        throw new AppError(
+          409,
+          "ORDER_REQUIRES_ITEM",
+          "An order must retain at least one item",
+        );
+      await this.repository.cancelLine(
+        sheet.title,
+        rowIndex + 1,
+        new Date().toISOString(),
+      );
+      return this.get(orderId);
     }
     throw new AppError(
       404,
@@ -727,13 +797,22 @@ export class OrderService {
     inventory: Map<string, InventoryItem>,
     reservedByLine?: Map<string, number>,
   ) {
-    const dataRows = sheet.rows.slice(1).filter((row) => row[13]);
-    const first = dataRows[0];
+    const allDataRows = sheet.rows.slice(1).filter((row) => row[13]);
+    const dataRows = allDataRows.filter(
+      (row) => text(row[9]).toUpperCase() !== "CANCELLED",
+    );
+    const first = allDataRows[0];
     if (!first)
       throw new AppError(
         409,
         "INVALID_ORDER_SHEET",
         `${sheet.title} has no order rows`,
+      );
+    if (dataRows.length === 0)
+      throw new AppError(
+        409,
+        "INVALID_ORDER_SHEET",
+        `${sheet.title} has no active order rows`,
       );
     const completed = dataRows.every(
       (row) => text(row[9]).toUpperCase() === "SHIPPED",
@@ -802,6 +881,8 @@ export class OrderService {
       customerName: text(first[22]),
       dateReceived: text(first[15]),
       orderNotes: text(first[21]),
+      actualGrossWeight: optionalNumeric(first[23], "ACTUAL GROSS WT"),
+      actualVolume: optionalNumeric(first[24], "ACTUAL VOLUME"),
       sheetTitle: sheet.title,
       sheetUrl: sheetUrl(sheet.sheetId),
       ...this.totals(items),
@@ -854,6 +935,8 @@ export class OrderService {
         timestamp,
         orderNotes,
         customerName,
+        "",
+        "",
       ];
     });
   }

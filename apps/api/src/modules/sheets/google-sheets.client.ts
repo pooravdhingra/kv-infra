@@ -407,29 +407,45 @@ export class GoogleSheetsClient {
     hiddenColumnStart: number,
     hiddenColumnEnd: number,
   ) {
+    await this.formatOrderTabs(spreadsheetId, [
+      { sheetId, hiddenColumnStart, hiddenColumnEnd },
+    ]);
+  }
+
+  async formatOrderTabs(
+    spreadsheetId: string,
+    tabs: Array<{
+      sheetId: number;
+      hiddenColumnStart: number;
+      hiddenColumnEnd: number;
+    }>,
+  ) {
+    if (tabs.length === 0) return;
     await this.request(`${SHEETS_API}/${spreadsheetId}:batchUpdate`, {
       method: "POST",
       body: JSON.stringify({
-        requests: [
-          {
-            updateSheetProperties: {
-              properties: { sheetId, gridProperties: { frozenRowCount: 1 } },
-              fields: "gridProperties.frozenRowCount",
-            },
-          },
-          {
-            updateDimensionProperties: {
-              range: {
-                sheetId,
-                dimension: "COLUMNS",
-                startIndex: hiddenColumnStart,
-                endIndex: hiddenColumnEnd,
+        requests: tabs.flatMap(
+          ({ sheetId, hiddenColumnStart, hiddenColumnEnd }) => [
+            {
+              updateSheetProperties: {
+                properties: { sheetId, gridProperties: { frozenRowCount: 1 } },
+                fields: "gridProperties.frozenRowCount",
               },
-              properties: { hiddenByUser: true },
-              fields: "hiddenByUser",
             },
-          },
-        ],
+            {
+              updateDimensionProperties: {
+                range: {
+                  sheetId,
+                  dimension: "COLUMNS",
+                  startIndex: hiddenColumnStart,
+                  endIndex: hiddenColumnEnd,
+                },
+                properties: { hiddenByUser: true },
+                fields: "hiddenByUser",
+              },
+            },
+          ],
+        ),
       }),
     });
     this.invalidateSpreadsheet(spreadsheetId);

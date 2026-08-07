@@ -180,6 +180,15 @@ export const updateOrder = async (orderId: string, input: UpdateOrderRequest) =>
     (await api.put(`/orders/${encodeURIComponent(orderId)}`, input)).data,
   ).data;
 
+export const removeOrderLine = async (orderId: string, orderLineId: string) =>
+  orderResponseSchema.parse(
+    (
+      await api.delete(
+        `/orders/${encodeURIComponent(orderId)}/lines/${encodeURIComponent(orderLineId)}`,
+      )
+    ).data,
+  ).data;
+
 export const listClientOrderLinks = async () =>
   clientOrderLinkListResponseSchema.parse(
     (await api.get("/client-order-links")).data,

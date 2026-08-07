@@ -64,6 +64,9 @@ class FakePackingRepository implements PackingRepository {
     this.current = next;
     this.allocationRow = allocationRow;
   }
+  async appendEvents(rows: unknown[][]) {
+    this.events.push(...rows.map(eventFromRow));
+  }
 }
 
 const linkedOrder: Order = {
@@ -79,6 +82,8 @@ const linkedOrder: Order = {
   totalQuantity: 40,
   grossWeight: 0,
   volume: 0,
+  actualGrossWeight: null,
+  actualVolume: null,
   items: [
     {
       orderLineId: "ORD-2026-0001-L001",
@@ -109,6 +114,49 @@ const linkedOrder: Order = {
 };
 
 describe("PackingService", () => {
+  it("appends an unlinked snapshot without deleting the packing history", async () => {
+    const repository = new FakePackingRepository();
+    repository.events = [
+      {
+        packingId: "PACK-2026-0001",
+        date: "2026-08-04",
+        sku: inventory.sku,
+        itemDescription: inventory.itemDescription,
+        quantityTaken: 40,
+        goodQuantity: 0,
+        packedCartons: 0,
+        defectiveQuantity: 0,
+        shortQuantity: 0,
+        leftUnpackedQuantity: 0,
+        assignedToOrder: false,
+        orderId: linkedOrder.orderId,
+        orderLineId: linkedOrder.items[0]!.orderLineId,
+        status: "IN PACKING",
+        notes: "Linked session",
+      },
+    ];
+    const service = new PackingService(
+      repository,
+      { list: async () => [repository.current], update: async () => undefined },
+      {} as never,
+    );
+
+    await expect(
+      service.unlinkForLine(
+        linkedOrder.orderId,
+        linkedOrder.items[0]!.orderLineId,
+      ),
+    ).resolves.toBe(1);
+    expect(repository.events).toHaveLength(2);
+    expect(repository.events[1]).toMatchObject({
+      packingId: "PACK-2026-0001",
+      orderId: null,
+      orderLineId: null,
+      status: "IN PACKING",
+    });
+    expect(repository.events[1]?.notes).toContain("[UNLINKED FROM");
+  });
+
   it("moves stock into packing and finishes with reconciled QA quantities", async () => {
     const repository = new FakePackingRepository();
     let syncedSku = "";

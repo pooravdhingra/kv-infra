@@ -12,7 +12,7 @@ Two authenticated profiles exist: Operator and Owner. Both currently open the sa
 
 1. Create, edit, and archive a SKU.
 2. Create an order and a human-readable order sheet tab.
-3. Calculate total quantity, gross weight, and volume.
+3. Calculate estimated gross weight and volume from complete SKU measurements, and record operator-entered actual shipment totals.
 4. Check packed and unpacked stock and suggest the next valid action.
 5. Reserve packed stock; pack/QA unpacked stock.
 6. Request shortfall stock from a prioritized supplier through WhatsApp.
@@ -20,7 +20,7 @@ Two authenticated profiles exist: Operator and Owner. Both currently open the sa
 8. Receive material, finish packing/QA, and allocate it to an order.
 9. Maintain one inventory summary row per SKU.
 10. Accept a client order through a signed single-submit link and provide a permanent secret mobile SKU-creation form.
-11. Let an authenticated operator correct a pending order without exposing editing through the client link or deleting existing order lines.
+11. Let an authenticated operator correct a pending order and audit-remove lines without exposing editing through the client link or deleting business history.
 
 ## Primary screens
 
