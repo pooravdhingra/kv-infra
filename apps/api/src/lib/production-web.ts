@@ -3,8 +3,14 @@ import { extname, resolve } from "node:path";
 
 import { env, projectRoot } from "../config/env.js";
 
+const signedBrowserRoutePrefixes = ["/order/", "/add-sku/"] as const;
+
 export const shouldServeSpaDocument = (method: string, requestPath: string) =>
-  method === "GET" && extname(requestPath) === "";
+  method === "GET" &&
+  (extname(requestPath) === "" ||
+    signedBrowserRoutePrefixes.some((prefix) =>
+      requestPath.startsWith(prefix),
+    ));
 
 export const mountProductionWeb = (app: Express) => {
   if (env.NODE_ENV !== "production") return;
