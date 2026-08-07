@@ -54,8 +54,8 @@ const tokenFileError = (
   );
 };
 
-const encryptionKey = () => {
-  if (env.TOKEN_ENCRYPTION_KEY.length < 32) {
+const encryptionKey = (secret: string) => {
+  if (secret.length < 32) {
     throw new AppError(
       503,
       "GOOGLE_NOT_CONFIGURED",
@@ -63,13 +63,16 @@ const encryptionKey = () => {
     );
   }
 
-  return createHash("sha256").update(env.TOKEN_ENCRYPTION_KEY).digest();
+  return createHash("sha256").update(secret).digest();
 };
 
 export class EncryptedFileTokenStore implements TokenStore {
   private readonly filePath: string;
 
-  constructor(filePath = env.GOOGLE_TOKEN_FILE) {
+  constructor(
+    filePath = env.GOOGLE_TOKEN_FILE,
+    private readonly encryptionSecret = env.TOKEN_ENCRYPTION_KEY,
+  ) {
     this.filePath = isAbsolute(filePath)
       ? filePath
       : resolve(projectRoot, filePath);
@@ -91,7 +94,7 @@ export class EncryptedFileTokenStore implements TokenStore {
     const encrypted = encryptedFileSchema.parse(JSON.parse(contents));
     const decipher = createDecipheriv(
       "aes-256-gcm",
-      encryptionKey(),
+      encryptionKey(this.encryptionSecret),
       Buffer.from(encrypted.iv, "base64"),
     );
     decipher.setAuthTag(Buffer.from(encrypted.authTag, "base64"));
@@ -106,7 +109,11 @@ export class EncryptedFileTokenStore implements TokenStore {
   async write(tokens: GoogleTokenSet) {
     const validated = tokenSetSchema.parse(tokens);
     const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);
+    const cipher = createCipheriv(
+      "aes-256-gcm",
+      encryptionKey(this.encryptionSecret),
+      iv,
+    );
     const ciphertext = Buffer.concat([
       cipher.update(JSON.stringify(validated), "utf8"),
       cipher.final(),

@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { EncryptedFileTokenStore } from "./google-token-store.js";
 
 const temporaryDirectories: string[] = [];
+const testEncryptionKey = "test-only-token-encryption-key-32-characters";
 
 const temporaryDirectory = async () => {
   const directory = await mkdtemp(join(tmpdir(), "kv-google-token-"));
@@ -27,6 +28,7 @@ describe("EncryptedFileTokenStore", () => {
     const directory = await temporaryDirectory();
     const store = new EncryptedFileTokenStore(
       join(directory, ".secrets", "google-oauth.json"),
+      testEncryptionKey,
     );
     const tokens = {
       accessToken: "access-token",
@@ -45,6 +47,7 @@ describe("EncryptedFileTokenStore", () => {
     await writeFile(blockingFile, "blocked");
     const store = new EncryptedFileTokenStore(
       join(blockingFile, "google-oauth.json"),
+      testEncryptionKey,
     );
 
     await expect(
